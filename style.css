@@ -157,6 +157,20 @@ h2 {
     color: var(--text-light);
 }
 
+.caret {
+    margin-left: 1rem;
+    border: solid var(--text-light);
+    border-width: 0 2px 2px 0;
+    display: inline-block;
+    padding: 4px;
+    transform: rotate(45deg);
+    transition: transform 0.3s;
+}
+
+.pool-card.expanded .caret {
+    transform: rotate(-135deg);
+}
+
 /* Card Details (Hidden by default) */
 .card-details {
     display: none;
