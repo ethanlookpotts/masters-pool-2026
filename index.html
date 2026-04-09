@@ -7,13 +7,16 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
 </head>
 <body>
     <header>
         <div class="container">
             <h1>2026 Masters Pool</h1>
-            <div id="last-updated" class="last-updated">Updating...</div>
+            <div class="refresh-controls">
+                <button id="refresh-btn">Refresh Leaderboard</button>
+                <div id="last-updated" class="last-updated">Updating...</div>
+            </div>
         </div>
     </header>
 
@@ -22,18 +25,8 @@
             <div class="section-header">
                 <h2>Pool Leaderboard</h2>
             </div>
-            <div id="pool-leaderboard" class="card-grid">
-                <!-- JS will inject cards here -->
+            <div id="pool-leaderboard" class="vertical-stack">
                 <div class="loading">Loading live scores...</div>
-            </div>
-        </section>
-
-        <section id="teams-section">
-            <div class="section-header">
-                <h2>Team Details</h2>
-            </div>
-            <div id="team-details" class="team-grid">
-                <!-- JS will inject team details here -->
             </div>
         </section>
     </main>

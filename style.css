@@ -22,7 +22,7 @@ body {
 }
 
 .container {
-    max-width: 1000px;
+    max-width: 800px;
     margin: 0 auto;
     padding: 0 1rem;
 }
@@ -41,9 +41,30 @@ h1 {
     margin-bottom: 0.5rem;
 }
 
+.refresh-controls {
+    margin-top: 1rem;
+}
+
+#refresh-btn {
+    background: var(--masters-gold);
+    color: var(--augusta-green);
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: transform 0.1s;
+}
+
+#refresh-btn:active {
+    transform: translateY(2px);
+}
+
 .last-updated {
     font-size: 0.8rem;
     opacity: 0.8;
+    margin-top: 0.5rem;
 }
 
 main {
@@ -63,98 +84,170 @@ h2 {
     color: var(--augusta-green);
 }
 
-.card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 3rem;
+.vertical-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 .pool-card {
     background: white;
     border-radius: 8px;
-    padding: 1.5rem;
     box-shadow: var(--shadow);
     border-left: 5px solid var(--augusta-green);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    overflow: hidden;
 }
 
 .pool-card.winner {
-    border-color: var(--masters-gold);
-    background: linear-gradient(to right, white, #fffdf0);
+    border-left-color: var(--masters-gold);
 }
 
-.pool-card .rank {
-    font-size: 1.5rem;
+.card-summary {
+    padding: 1.2rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.card-summary:hover {
+    background: #fcfcfc;
+}
+
+.rank-drafter {
+    display: flex;
+    align-items: center;
+}
+
+.rank {
     font-weight: 700;
-    color: var(--text-light);
-    margin-right: 1rem;
-}
-
-.pool-card .info h3 {
     font-size: 1.2rem;
-    margin-bottom: 0.2rem;
+    margin-right: 1rem;
+    color: var(--text-light);
+    width: 30px;
 }
 
-.pool-card .prize {
-    font-size: 1.4rem;
+.drafter-name {
+    font-family: 'Playfair Display', serif;
     font-weight: 700;
+    font-size: 1.3rem;
     color: var(--augusta-green);
+}
+
+.prizes-summary {
     text-align: right;
 }
 
-.team-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
-    gap: 2rem;
+.projected-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--text-light);
 }
 
-@media (max-width: 600px) {
-    .team-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.team-section {
-    background: white;
-    border-radius: 8px;
-    padding: 1.5rem;
-    box-shadow: var(--shadow);
-}
-
-.team-section h3 {
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.5rem;
-    margin-bottom: 1rem;
+.projected-amount {
+    font-weight: 700;
+    font-size: 1.4rem;
     color: var(--augusta-green);
 }
 
-.player-row {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1.5fr;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid #f0f0f0;
+.actual-amount {
     font-size: 0.9rem;
-}
-
-.player-row.header {
-    font-weight: 700;
     color: var(--text-light);
-    font-size: 0.8rem;
+}
+
+/* Card Details (Hidden by default) */
+.card-details {
+    display: none;
+    padding: 0 1.5rem 1.5rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.pool-card.expanded .card-details {
+    display: block;
+}
+
+.player-header {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    padding: 0.8rem 0;
+    font-weight: 700;
+    font-size: 0.75rem;
     text-transform: uppercase;
+    color: var(--text-light);
+    border-bottom: 2px solid var(--border-color);
 }
 
-.player-row .name { font-weight: 600; }
-.player-row .score { text-align: center; }
-.player-row .pos { text-align: center; }
-.player-row .money { text-align: right; color: var(--augusta-green); font-weight: 600; }
-
-.player-row.missed-cut {
-    opacity: 0.6;
-    font-style: italic;
+.player-item {
+    border-bottom: 1px solid #f5f5f5;
+    padding: 1rem 0;
 }
+
+.player-main-info {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    align-items: center;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.player-name { font-weight: 700; font-size: 1.05rem; }
+.player-score { text-align: center; }
+.player-rank { text-align: center; }
+.player-thru { text-align: center; font-size: 0.85rem; color: var(--text-light); }
+.player-projected { text-align: right; color: var(--augusta-green); }
+
+.player-round-info {
+    font-size: 0.8rem;
+    background: #f9f9f9;
+    padding: 0.8rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+}
+
+.round-status {
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    color: var(--text-light);
+    display: flex;
+    justify-content: space-between;
+}
+
+.scorecard {
+    display: flex;
+    overflow-x: auto;
+    gap: 4px;
+    padding-bottom: 4px;
+}
+
+.hole {
+    min-width: 25px;
+    text-align: center;
+}
+
+.hole-num {
+    font-size: 0.6rem;
+    color: #999;
+    margin-bottom: 2px;
+}
+
+.hole-score {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 2px;
+    height: 25px;
+    width: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.hole-score.birdie { background-color: #f1f8e9; border-color: #81c784; border-radius: 50%; }
+.hole-score.eagle { background-color: #fff9c4; border-color: #fbc02d; border-radius: 50%; border-width: 2px; }
+.hole-score.bogey { background-color: #fce4ec; border-color: #e57373; border-radius: 0; }
+.hole-score.double { background-color: #fce4ec; border-color: #d32f2f; border-radius: 0; border-width: 2px; }
 
 footer {
     text-align: center;
@@ -164,9 +257,17 @@ footer {
 }
 
 .loading {
-    grid-column: 1 / -1;
     text-align: center;
     padding: 3rem;
     font-style: italic;
     color: var(--text-light);
+}
+
+@media (max-width: 600px) {
+    .player-header, .player-main-info {
+        grid-template-columns: 2fr 1fr 1fr 1fr;
+    }
+    .player-projected {
+        display: none; /* Hide projected on very small screens in main info to fit scorecard better */
+    }
 }
