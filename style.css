@@ -118,6 +118,7 @@ h2 {
 .rank-drafter {
     display: flex;
     align-items: center;
+    flex-grow: 1;
 }
 
 .rank {
@@ -125,7 +126,7 @@ h2 {
     font-size: 1.2rem;
     margin-right: 1rem;
     color: var(--text-light);
-    width: 30px;
+    width: 35px;
 }
 
 .drafter-name {
@@ -137,34 +138,40 @@ h2 {
 
 .prizes-summary {
     text-align: right;
+    margin-right: 1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .projected-label {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     text-transform: uppercase;
     font-weight: 700;
     color: var(--text-light);
+    margin-bottom: -2px;
 }
 
 .projected-amount {
     font-weight: 700;
     font-size: 1.4rem;
     color: var(--augusta-green);
+    line-height: 1.1;
 }
 
 .actual-amount {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     color: var(--text-light);
 }
 
 .caret {
-    margin-left: 1rem;
     border: solid var(--text-light);
     border-width: 0 2px 2px 0;
     display: inline-block;
     padding: 4px;
     transform: rotate(45deg);
     transition: transform 0.3s;
+    margin-bottom: 2px;
 }
 
 .pool-card.expanded .caret {

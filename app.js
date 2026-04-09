@@ -52,29 +52,43 @@ async function updateLeaderboard() {
 
         const competition = mastersEvent.competitions[0];
         const competitors = competition.competitors;
-        const isTournamentOver = competition.status.type.state === 'post';
+        const isTournamentOver = competition.status?.type?.state === 'post';
 
         const playerMap = {};
         competitors.forEach(c => {
             const name = c.athlete.displayName;
             const statusType = c.status?.type || {};
             
-            // Get round scores (hole by hole)
-            const currentRoundObj = c.linescores?.find(ls => ls.period === c.status?.period) || c.linescores?.[c.linescores.length - 1];
+            // Get current round object
+            const roundNum = c.status?.period || (c.linescores ? c.linescores.length : 0);
+            const currentRoundObj = c.linescores?.find(ls => ls.period === roundNum) || c.linescores?.[c.linescores.length - 1];
+            
             const roundScores = currentRoundObj?.linescores?.map(ls => ({
                 hole: ls.period,
                 score: ls.value,
                 rel: ls.scoreType?.displayValue
             })) || [];
 
+            // Robust Thru calculation
+            let thru = "Tee Time";
+            if (isTournamentOver) {
+                thru = "F";
+            } else if (statusType.id === "3") {
+                thru = "MC";
+            } else if (roundScores.length > 0) {
+                thru = roundScores.length === 18 ? "F" : roundScores.length;
+            } else if (c.status?.displayValue) {
+                thru = c.status.displayValue;
+            }
+
             playerMap[name] = {
                 name: name,
                 score: c.score?.displayValue || c.score || 'E',
                 rank: parseInt(c.curline || c.status?.position?.id || c.order) || 999,
                 status: statusType.name || "UNKNOWN", 
-                round: c.status?.period || 0,
-                thru: c.status?.displayValue || (statusType.state === 'pre' ? 'Tee Time' : 'F'),
-                isCut: statusType.id === "3" && !isTournamentOver,
+                round: roundNum,
+                thru: thru,
+                isCut: statusType.id === "3",
                 roundScores: roundScores
             };
         });
@@ -168,6 +182,7 @@ function renderUI(standings, isOver) {
                 <div class="caret"></div>
             </div>
             <div class="card-details">
+                <h4 style="margin: 1rem 0 0.5rem 0; color: var(--augusta-green); font-size: 0.9rem; text-transform: uppercase;">Team Details</h4>
                 <div class="player-header">
                     <div>Player</div>
                     <div style="text-align:center">Score</div>
