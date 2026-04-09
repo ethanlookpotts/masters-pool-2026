@@ -213,62 +213,78 @@ h2 {
     margin-bottom: 0.5rem;
 }
 
-.player-name { font-weight: 700; font-size: 1.05rem; }
+.player-name-flag {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.flag-icon {
+    width: 20px;
+    height: 14px;
+    object-fit: cover;
+    border: 1px solid #eee;
+}
+
+.player-name { font-weight: 700; font-size: 1rem; }
 .player-score { text-align: center; }
 .player-rank { text-align: center; }
 .player-thru { text-align: center; font-size: 0.85rem; color: var(--text-light); }
 .player-projected { text-align: right; color: var(--augusta-green); }
 
 .player-round-info {
-    font-size: 0.8rem;
-    background: #f9f9f9;
-    padding: 0.8rem;
+    font-size: 0.75rem;
+    background: #fdfdfd;
+    padding: 0.6rem;
+    border: 1px solid #f0f0f0;
     border-radius: 4px;
-    margin-top: 0.5rem;
+    margin-top: 0.4rem;
 }
 
 .round-status {
     font-weight: 700;
-    margin-bottom: 0.4rem;
-    color: var(--text-light);
+    margin-bottom: 0.3rem;
+    color: var(--augusta-green);
     display: flex;
     justify-content: space-between;
+    font-size: 0.7rem;
+    text-transform: uppercase;
 }
 
 .scorecard {
     display: flex;
-    overflow-x: auto;
-    gap: 4px;
-    padding-bottom: 4px;
+    flex-wrap: wrap;
+    gap: 3px;
 }
 
 .hole {
-    min-width: 25px;
     text-align: center;
 }
 
 .hole-num {
-    font-size: 0.6rem;
+    font-size: 0.55rem;
     color: #999;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
 }
 
 .hole-score {
     background: white;
     border: 1px solid #ddd;
     border-radius: 2px;
-    height: 25px;
-    width: 25px;
+    height: 22px;
+    width: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
+    font-size: 0.75rem;
 }
 
 .hole-score.birdie { background-color: #f1f8e9; border-color: #81c784; border-radius: 50%; }
 .hole-score.eagle { background-color: #fff9c4; border-color: #fbc02d; border-radius: 50%; border-width: 2px; }
 .hole-score.bogey { background-color: #fce4ec; border-color: #e57373; border-radius: 0; }
 .hole-score.double { background-color: #fce4ec; border-color: #d32f2f; border-radius: 0; border-width: 2px; }
+.hole-score.par { color: #888; border-color: #eee; font-weight: 400; }
 
 footer {
     text-align: center;

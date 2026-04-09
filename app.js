@@ -53,43 +53,59 @@ async function updateLeaderboard() {
         const competition = mastersEvent.competitions[0];
         const competitors = competition.competitors;
         const isTournamentOver = competition.status?.type?.state === 'post';
+        const globalRoundNum = competition.status?.period || 1;
 
         const playerMap = {};
         competitors.forEach(c => {
             const name = c.athlete.displayName;
             const statusType = c.status?.type || {};
             
-            // Get current round object
-            const roundNum = c.status?.period || (c.linescores ? c.linescores.length : 0);
-            const currentRoundObj = c.linescores?.find(ls => ls.period === roundNum) || c.linescores?.[c.linescores.length - 1];
-            
-            const roundScores = currentRoundObj?.linescores?.map(ls => ({
-                hole: ls.period,
-                score: ls.value,
-                rel: ls.scoreType?.displayValue
+            // Get round number and scores for ALL rounds
+            const allRounds = c.linescores?.map(ls => ({
+                period: ls.period,
+                displayValue: ls.displayValue,
+                holes: ls.linescores?.map(h => ({
+                    hole: h.period,
+                    score: h.value,
+                    rel: h.scoreType?.displayValue
+                })) || [],
+                teeTime: ls.statistics?.categories?.[0]?.stats?.slice(-1)[0]?.displayValue
             })) || [];
 
             // Robust Thru calculation
-            let thru = "Tee Time";
+            let thru = "--";
+            const currentRound = allRounds.find(r => r.period === globalRoundNum);
+            const holesPlayedToday = currentRound?.holes?.length || 0;
+
             if (isTournamentOver) {
                 thru = "F";
             } else if (statusType.id === "3") {
                 thru = "MC";
-            } else if (roundScores.length > 0) {
-                thru = roundScores.length === 18 ? "F" : roundScores.length;
+            } else if (holesPlayedToday > 0) {
+                thru = holesPlayedToday === 18 ? "F" : holesPlayedToday;
+            } else if (currentRound?.teeTime) {
+                // Extract just the time from "Thu Apr 09 09:55:00 PDT 2026"
+                const timeParts = currentRound.teeTime.split(' ');
+                if (timeParts.length >= 4) {
+                    const time = timeParts[3].substring(0, 5); // "09:55"
+                    thru = time;
+                } else {
+                    thru = "Tee Time";
+                }
             } else if (c.status?.displayValue) {
                 thru = c.status.displayValue;
             }
 
             playerMap[name] = {
                 name: name,
+                flag: c.athlete.flag?.href || "",
                 score: c.score?.displayValue || c.score || 'E',
                 rank: parseInt(c.curline || c.status?.position?.id || c.order) || 999,
                 status: statusType.name || "UNKNOWN", 
-                round: roundNum,
+                round: globalRoundNum,
                 thru: thru,
                 isCut: statusType.id === "3",
-                roundScores: roundScores
+                allRounds: allRounds
             };
         });
 
@@ -193,25 +209,36 @@ function renderUI(standings, isOver) {
                 ${team.players.map(p => `
                     <div class="player-item">
                         <div class="player-main-info">
-                            <div class="player-name">${p.name}</div>
+                            <div class="player-name-flag">
+                                <img class="flag-icon" src="${p.flag}" alt="">
+                                <div class="player-name">${p.name}</div>
+                            </div>
                             <div class="player-score">${p.score}</div>
                             <div class="player-rank">${p.rank === 999 ? 'MC' : 'T' + p.rank}</div>
                             <div class="player-thru">${p.thru}</div>
                             <div class="player-projected">$${p.projectedPrize.toLocaleString()}</div>
                         </div>
-                        ${p.roundScores.length > 0 ? `
-                            <div class="player-round-info">
-                                <div class="round-status">Round ${p.round} Scorecard</div>
-                                <div class="scorecard">
-                                    ${p.roundScores.map(rs => `
-                                        <div class="hole">
-                                            <div class="hole-num">${rs.hole}</div>
-                                            <div class="hole-score ${getScoreClass(rs.rel)}">${rs.score}</div>
-                                        </div>
-                                    `).join('')}
+                        <div class="player-rounds-container">
+                            ${p.allRounds.map(round => `
+                                <div class="player-round-info">
+                                    <div class="round-status">
+                                        <span>Round ${round.period}</span>
+                                        <span>${round.displayValue || 'E'}</span>
+                                    </div>
+                                    <div class="scorecard">
+                                        ${round.holes.length > 0 ? 
+                                            round.holes.map(h => `
+                                                <div class="hole">
+                                                    <div class="hole-num">${h.hole}</div>
+                                                    <div class="hole-score ${getScoreClass(h.rel)}">${h.score}</div>
+                                                </div>
+                                            `).join('') : 
+                                            `<div style="font-size: 0.65rem; color: #999;">Tee Time: ${round.teeTime ? round.teeTime.split(' ')[3].substring(0, 5) : 'N/A'}</div>`
+                                        }
+                                    </div>
                                 </div>
-                            </div>
-                        ` : ''}
+                            `).join('')}
+                        </div>
                     </div>
                 `).join('')}
             </div>
