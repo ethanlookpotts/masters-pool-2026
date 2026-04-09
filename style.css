@@ -138,10 +138,11 @@ h2 {
 
 .prizes-summary {
     text-align: right;
-    margin-right: 1rem;
+    margin-right: 0.8rem;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .projected-label {
@@ -149,29 +150,31 @@ h2 {
     text-transform: uppercase;
     font-weight: 700;
     color: var(--text-light);
-    margin-bottom: -2px;
+    margin-bottom: -1px;
 }
 
 .projected-amount {
     font-weight: 700;
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     color: var(--augusta-green);
-    line-height: 1.1;
+    line-height: 1;
 }
 
 .actual-amount {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--text-light);
+    margin-top: 2px;
 }
 
 .caret {
-    border: solid var(--text-light);
+    border: solid #ccc;
     border-width: 0 2px 2px 0;
     display: inline-block;
-    padding: 4px;
+    padding: 3px;
     transform: rotate(45deg);
     transition: transform 0.3s;
     margin-bottom: 2px;
+    flex-shrink: 0;
 }
 
 .pool-card.expanded .caret {
