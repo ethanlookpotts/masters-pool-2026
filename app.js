@@ -55,14 +55,15 @@ async function updateLeaderboard() {
         const playerMap = {};
         competitors.forEach(c => {
             const name = c.athlete.displayName;
+            const statusType = c.status?.type || {};
             playerMap[name] = {
                 name: name,
-                score: c.score?.displayValue || 'E',
-                rank: parseInt(c.curline) || 999,
-                status: c.status.type.name, // e.g., "STATUS_IN_PROGRESS", "STATUS_FINAL"
+                score: c.score?.displayValue || c.score || 'E',
+                rank: parseInt(c.curline || c.status?.position?.id || c.order) || 999,
+                status: statusType.name || "UNKNOWN", 
                 round: c.linescores?.length || 0,
-                thru: c.status.period || (c.status.type.state === 'pre' ? 'Tee Time' : 'F'),
-                isCut: c.status.type.id === "3" // 3 is usually missed cut
+                thru: c.status?.period || (statusType.state === 'pre' ? 'Tee Time' : 'F'),
+                isCut: statusType.id === "3" // 3 is usually missed cut
             };
         });
 
@@ -102,8 +103,8 @@ function calculateProjectedPrizes(competitors) {
     // 1. Group by rank
     const rankGroups = {};
     competitors.forEach(c => {
-        const rank = parseInt(c.curline) || 999;
-        if (c.status.type.id === "3") return; // Missed cut handled later
+        const rank = parseInt(c.curline || c.status?.position?.id || c.order) || 999;
+        if (c.status?.type?.id === "3") return; // Missed cut handled later
         if (!rankGroups[rank]) rankGroups[rank] = [];
         rankGroups[rank].push(c.athlete.displayName);
     });
@@ -133,7 +134,7 @@ function calculateProjectedPrizes(competitors) {
 
     // Handle missed cut
     competitors.forEach(c => {
-        if (c.status.type.id === "3") {
+        if (c.status?.type?.id === "3") {
             projectedPrizes[c.athlete.displayName] = prizeTable.cut;
         }
     });
