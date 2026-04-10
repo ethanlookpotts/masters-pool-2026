@@ -73,6 +73,9 @@ async function updateLeaderboard() {
         }
 
         const playerMap = {};
+        const draftedNames = new Set(Object.values(draftData).flat());
+        const missingTeeTimeDrafted = [];
+
         competitors.forEach(c => {
             const name = c.athlete.displayName;
             const statusType = c.status?.type || {};
@@ -89,41 +92,75 @@ async function updateLeaderboard() {
                 teeTime: ls.statistics?.categories?.[0]?.stats?.slice(-1)[0]?.displayValue
             })) || [];
 
-            // Robust Thru calculation
-            let thru = "--";
-            const currentRound = allRounds.find(r => r.period === globalRoundNum);
-            const holesPlayedToday = currentRound?.holes?.length || 0;
-
-            if (isTournamentOver) {
-                thru = "F";
-            } else if (statusType.id === "3") {
-                thru = "MC";
-            } else if (holesPlayedToday > 0) {
-                thru = holesPlayedToday === 18 ? "F" : holesPlayedToday;
-            } else if (currentRound?.teeTime) {
-                // Extract just the time from "Thu Apr 09 09:55:00 PDT 2026"
-                const timeParts = currentRound.teeTime.split(' ');
-                if (timeParts.length >= 4) {
-                    const time = timeParts[3].substring(0, 5); // "09:55"
-                    thru = time;
-                } else {
-                    thru = "Tee Time";
-                }
-            } else if (c.status?.displayValue) {
-                thru = c.status.displayValue;
-            }
-
             playerMap[name] = {
+                id: c.id,
                 name: name,
                 flag: c.athlete.flag?.href || "",
                 score: c.score?.displayValue || c.score || 'E',
                 rank: parseInt(c.curline || c.status?.position?.id || c.order) || 999,
                 status: statusType.name || "UNKNOWN", 
                 round: globalRoundNum,
-                thru: thru,
                 isCut: statusType.id === "3",
-                allRounds: allRounds
+                statusDisplay: c.status?.displayValue,
+                allRounds: allRounds,
+                thru: "--"
             };
+
+            if (draftedNames.has(name)) {
+                missingTeeTimeDrafted.push(playerMap[name]);
+            }
+        });
+
+        // Hybrid Approach: Fetch missing tee times from Core API for drafted players
+        const promises = missingTeeTimeDrafted.map(async (p) => {
+            // Only fetch if a current/future round has no holes played and no tee time
+            const needsCoreFetch = p.allRounds.some(r => !r.teeTime && r.holes.length === 0 && r.period >= globalRoundNum);
+            if (!needsCoreFetch || !mastersEvent.id || !competition.id) return;
+            
+            try {
+                const url = `https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/${mastersEvent.id}/competitions/${competition.id}/competitors/${p.id}/linescores?lang=en&region=us`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                
+                if (data.items && Array.isArray(data.items)) {
+                    data.items.forEach(ls => {
+                        const roundObj = p.allRounds.find(r => r.period === ls.period);
+                        if (roundObj && !roundObj.teeTime && ls.teeTime) {
+                            const date = new Date(ls.teeTime);
+                            roundObj.teeTimeDisplay = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Core API fetch failed for", p.name, e);
+            }
+        });
+        
+        await Promise.all(promises);
+
+        // Now calculate thru for everyone
+        Object.values(playerMap).forEach(p => {
+            const currentRound = p.allRounds.find(r => r.period === globalRoundNum);
+            const holesPlayedToday = currentRound?.holes?.length || 0;
+
+            if (isTournamentOver) {
+                p.thru = "F";
+            } else if (p.isCut) {
+                p.thru = "MC";
+            } else if (holesPlayedToday > 0) {
+                p.thru = holesPlayedToday === 18 ? "F" : holesPlayedToday;
+            } else if (currentRound?.teeTimeDisplay) {
+                p.thru = currentRound.teeTimeDisplay;
+            } else if (currentRound?.teeTime) {
+                const timeParts = currentRound.teeTime.split(' ');
+                if (timeParts.length >= 4) {
+                    p.thru = timeParts[3].substring(0, 5); 
+                } else {
+                    p.thru = "Tee Time";
+                }
+            } else if (p.statusDisplay) {
+                p.thru = p.statusDisplay;
+            }
         });
 
         const playerPrizes = calculateProjectedPrizes(competitors);
@@ -279,7 +316,7 @@ function renderUI(standings, isOver, hasCutOccurred, roundNum) {
                                                     <div class="hole-score ${getScoreClass(h.rel)}">${h.score}</div>
                                                 </div>
                                             `).join('') : 
-                                            `<div style="font-size: 0.65rem; color: #999;">Tee Time: ${round.teeTime ? round.teeTime.split(' ')[3].substring(0, 5) : 'N/A'}</div>`
+                                            `<div style="font-size: 0.65rem; color: #999;">Tee Time: ${round.teeTimeDisplay ? round.teeTimeDisplay : (round.teeTime ? round.teeTime.split(' ')[3].substring(0, 5) : 'N/A')}</div>`
                                         }
                                     </div>
                                 </div>
