@@ -256,9 +256,10 @@ h2 {
 }
 
 .scorecard {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(18, max-content);
     gap: 3px;
+    justify-content: start;
 }
 
 .hole {
@@ -310,5 +311,8 @@ footer {
     }
     .player-projected {
         display: none; /* Hide projected on very small screens in main info to fit scorecard better */
+    }
+    .scorecard {
+        grid-template-columns: repeat(9, max-content);
     }
 }
