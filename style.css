@@ -43,9 +43,13 @@ h1 {
 
 .refresh-controls {
     margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-#refresh-btn {
+#refresh-btn, #field-rankings-btn {
     background: var(--masters-gold);
     color: var(--augusta-green);
     border: none;
@@ -57,8 +61,150 @@ h1 {
     transition: transform 0.1s;
 }
 
-#refresh-btn:active {
+#field-rankings-btn {
+    background: white;
+    border: 2px solid var(--masters-gold);
+}
+
+#refresh-btn:active, #field-rankings-btn:active {
     transform: translateY(2px);
+}
+
+.cut-line-display {
+    margin-top: 1rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    display: inline-block;
+    border: 1px solid var(--masters-gold);
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.6);
+    overflow: auto;
+}
+
+.modal-content {
+    background-color: var(--cream-bg);
+    margin: 5% auto;
+    padding: 0;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    position: relative;
+}
+
+.modal-header {
+    background-color: var(--augusta-green);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    color: white;
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.close-modal {
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .modal-content {
+        width: 95%;
+        margin: 10% auto;
+    }
+    .modal-body {
+        padding: 0.8rem;
+    }
+    .field-table td, .field-table th {
+        padding: 0.5rem 0.3rem;
+        font-size: 0.8rem;
+    }
+    .field-table .thru-cell, .field-table th:nth-child(4) {
+        display: none;
+    }
+    .field-table .rank-cell {
+        width: 35px;
+    }
+}
+
+.field-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.field-table th {
+    text-align: left;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-light);
+    border-bottom: 2px solid var(--border-color);
+    padding: 0.5rem;
+}
+
+.field-table td {
+    padding: 0.6rem 0.5rem;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+}
+
+.field-table tr.outside-cut {
+    background-color: #fff5f5;
+}
+
+.field-table .drafter-label {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--augusta-green);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-left: 0.5rem;
+    text-transform: uppercase;
+}
+
+.field-table .rank-cell { font-weight: 700; color: var(--text-light); width: 40px; }
+.field-table .name-cell { font-weight: 600; }
+.field-table .score-cell { font-weight: 700; text-align: center; }
+.field-table .thru-cell { color: var(--text-light); font-size: 0.8rem; text-align: right; }
+
+.field-player-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+    display: inline-block;
+}
+
+@media (max-width: 600px) {
+    .field-player-name {
+        max-width: 100px;
+    }
 }
 
 .last-updated {
@@ -306,6 +452,8 @@ footer {
 }
 
 @media (max-width: 600px) {
+    h1 { font-size: 1.8rem; }
+    .cut-line-display { font-size: 0.85rem; padding: 0.4rem 0.8rem; }
     .player-header, .player-main-info {
         grid-template-columns: 2fr 1fr 1fr 1fr;
     }

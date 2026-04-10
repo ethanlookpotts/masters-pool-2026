@@ -13,8 +13,12 @@
     <header>
         <div class="container">
             <h1>2026 Masters Pool</h1>
+            <div class="cut-line-display" id="cut-line-display">
+                <!-- Cut line will be injected here -->
+            </div>
             <div class="refresh-controls">
                 <button id="refresh-btn">Refresh Leaderboard</button>
+                <button id="field-rankings-btn">Full Field Rankings</button>
                 <div id="last-updated" class="last-updated">Updating...</div>
             </div>
         </div>
@@ -27,6 +31,19 @@
             </div>
         </section>
     </main>
+
+    <!-- Full Field Modal -->
+    <div id="field-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Field Rankings</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body" id="field-rankings-list">
+                <!-- Field rankings will be injected here -->
+            </div>
+        </div>
+    </div>
 
     <footer>
         <div class="container">
