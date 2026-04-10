@@ -229,13 +229,17 @@ async function updateLeaderboard() {
             }
         });
 
-        const playerPrizes = calculateProjectedPrizes(competitors);
+        const { prizes: playerPrizes, ranks: playerRanksMap } = calculatePrizesAndRanks(competitors);
+
+        // Update player ranks in playerMap and fullField
+        Object.values(playerMap).forEach(p => {
+            p.rank = playerRanksMap[p.name] || 999;
+        });
 
         // Calculate rank frequencies for 'T' display
         const rankCounts = {};
-        competitors.forEach(c => {
-            const r = parseInt(c.curline || c.status?.position?.id || c.order);
-            if (r) rankCounts[r] = (rankCounts[r] || 0) + 1;
+        Object.values(playerRanksMap).forEach(r => {
+            if (r !== 999 && r !== 998) rankCounts[r] = (rankCounts[r] || 0) + 1;
         });
 
         const teamStandings = [];
@@ -297,18 +301,42 @@ async function updateLeaderboard() {
     }
 }
 
-function calculateProjectedPrizes(competitors) {
-    const rankGroups = {};
-    competitors.forEach(c => {
-        const rank = parseInt(c.curline || c.status?.position?.id || c.order) || 999;
-        if (c.status?.type?.id === "3" && c.status?.type?.state !== 'post') return; 
-        if (!rankGroups[rank]) rankGroups[rank] = [];
-        rankGroups[rank].push(c.athlete.displayName);
+function calculatePrizesAndRanks(competitors) {
+    const getScoreValue = (c) => {
+        const s = c.score?.displayValue || c.score;
+        if (s === 'E' || s === 'even' || s === 'even par') return 0;
+        return parseInt(s?.toString().replace('+', '')) || 0;
+    };
+
+    const sorted = [...competitors].sort((a, b) => {
+        const isCutA = a.status?.type?.id === "3" || a.status?.displayValue?.includes("MC") || a.status?.type?.description?.includes("Missed Cut");
+        const isCutB = b.status?.type?.id === "3" || b.status?.displayValue?.includes("MC") || b.status?.type?.description?.includes("Missed Cut");
+        if (isCutA && !isCutB) return 1;
+        if (!isCutA && isCutB) return -1;
+        return getScoreValue(a) - getScoreValue(b);
     });
 
-    const projectedPrizes = {};
-    const sortedRanks = Object.keys(rankGroups).map(Number).sort((a, b) => a - b);
+    const ranks = {};
+    const rankGroups = {};
+    let currentRank = 1;
     
+    sorted.forEach((c, idx) => {
+        const isCut = c.status?.type?.id === "3" || c.status?.displayValue?.includes("MC") || c.status?.type?.description?.includes("Missed Cut");
+        const name = c.athlete.displayName;
+        if (isCut) {
+            ranks[name] = 999;
+        } else {
+            if (idx > 0 && getScoreValue(c) !== getScoreValue(sorted[idx - 1])) {
+                currentRank = idx + 1;
+            }
+            ranks[name] = currentRank;
+            if (!rankGroups[currentRank]) rankGroups[currentRank] = [];
+            rankGroups[currentRank].push(name);
+        }
+    });
+
+    const prizes = {};
+    const sortedRanks = Object.keys(rankGroups).map(Number).sort((a, b) => a - b);
     let currentPos = 1;
     sortedRanks.forEach(rank => {
         const players = rankGroups[rank];
@@ -319,16 +347,19 @@ function calculateProjectedPrizes(competitors) {
             sumPrize += prizeTable[pos] || prizeTable.flat_cut_min || 0;
         }
         const avgPrize = sumPrize / numPlayers;
-        players.forEach(name => { projectedPrizes[name] = avgPrize; });
+        players.forEach(name => { prizes[name] = avgPrize; });
         currentPos += numPlayers;
     });
 
     competitors.forEach(c => {
-        if (c.status?.type?.id === "3" && c.status?.type?.state !== 'post') {
-            projectedPrizes[c.athlete.displayName] = prizeTable.cut;
+        const name = c.athlete.displayName;
+        const isCut = c.status?.type?.id === "3" || c.status?.displayValue?.includes("MC") || c.status?.type?.description?.includes("Missed Cut");
+        if (isCut) {
+            prizes[name] = prizeTable.cut;
         }
     });
-    return projectedPrizes;
+
+    return { prizes, ranks };
 }
 
 function formatRank(rank, counts) {
