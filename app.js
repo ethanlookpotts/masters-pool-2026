@@ -62,13 +62,19 @@ async function updateLeaderboard() {
             const sortedScores = competitors
                 .map(c => {
                     const scoreStr = c.score?.displayValue || c.score;
-                    return scoreStr === 'E' ? 0 : (parseInt(scoreStr) || 0);
+                    if (scoreStr === 'E' || scoreStr === 'even') return 0;
+                    if (typeof scoreStr === 'string') {
+                        // Handle cases like "+5" or "-2"
+                        return parseInt(scoreStr.replace('+', '')) || 0;
+                    }
+                    return parseInt(scoreStr) || 0;
                 })
                 .sort((a, b) => a - b);
-            if (sortedScores.length >= 50) {
-                projectedCutScore = sortedScores[49];
-            } else if (sortedScores.length > 0) {
-                projectedCutScore = sortedScores[sortedScores.length - 1];
+            
+            if (sortedScores.length > 0) {
+                // The Masters cut is top 50 and ties.
+                const cutIndex = Math.min(50, sortedScores.length) - 1;
+                projectedCutScore = sortedScores[cutIndex];
             }
         }
 
@@ -83,20 +89,27 @@ async function updateLeaderboard() {
             // Get round number and scores for ALL rounds
             const allRounds = c.linescores?.map(ls => ({
                 period: ls.period,
-                displayValue: ls.displayValue,
+                displayValue: ls.displayValue, // This is the round score (e.g., "-2")
+                value: ls.value, // This is the round strokes (e.g., 70)
                 holes: ls.linescores?.map(h => ({
                     hole: h.period,
                     score: h.value,
                     rel: h.scoreType?.displayValue
                 })) || [],
-                teeTime: ls.statistics?.categories?.[0]?.stats?.slice(-1)[0]?.displayValue
+                teeTime: ls.statistics?.categories?.[0]?.stats?.find(s => s.displayValue && s.displayValue.includes('2026'))?.displayValue
             })) || [];
+
+            const currentScoreStr = c.score?.displayValue || c.score || 'E';
+            let numericScore = 0;
+            if (currentScoreStr === 'E' || currentScoreStr === 'even') numericScore = 0;
+            else numericScore = parseInt(currentScoreStr.toString().replace('+', '')) || 0;
 
             playerMap[name] = {
                 id: c.id,
                 name: name,
                 flag: c.athlete.flag?.href || "",
-                score: c.score?.displayValue || c.score || 'E',
+                score: currentScoreStr,
+                numericScore: numericScore,
                 rank: parseInt(c.curline || c.status?.position?.id || c.order) || 999,
                 status: statusType.name || "UNKNOWN", 
                 round: globalRoundNum,
@@ -149,17 +162,24 @@ async function updateLeaderboard() {
                 p.thru = "MC";
             } else if (holesPlayedToday > 0) {
                 p.thru = holesPlayedToday === 18 ? "F" : holesPlayedToday;
-            } else if (currentRound?.teeTimeDisplay) {
-                p.thru = currentRound.teeTimeDisplay;
-            } else if (currentRound?.teeTime) {
-                const timeParts = currentRound.teeTime.split(' ');
-                if (timeParts.length >= 4) {
-                    p.thru = timeParts[3].substring(0, 5); 
+            } else {
+                // Not started today yet
+                if (currentRound?.teeTimeDisplay) {
+                    p.thru = currentRound.teeTimeDisplay;
+                } else if (currentRound?.teeTime) {
+                    const timeParts = currentRound.teeTime.split(' ');
+                    // "Fri Apr 10 12:32:00 PDT 2026"
+                    const timeIdx = timeParts.findIndex(tp => tp.includes(':'));
+                    if (timeIdx !== -1) {
+                        p.thru = timeParts[timeIdx].substring(0, 5); 
+                    } else {
+                        p.thru = "Tee Time";
+                    }
+                } else if (p.statusDisplay) {
+                    p.thru = p.statusDisplay;
                 } else {
-                    p.thru = "Tee Time";
+                    p.thru = "--";
                 }
-            } else if (p.statusDisplay) {
-                p.thru = p.statusDisplay;
             }
         });
 
@@ -179,8 +199,7 @@ async function updateLeaderboard() {
                 if (hasCutOccurred) {
                     isMakingCut = !live.isCut;
                 } else {
-                    const scoreNum = live.score === 'E' ? 0 : (parseInt(live.score) || 0);
-                    isMakingCut = scoreNum <= projectedCutScore;
+                    isMakingCut = live.numericScore <= projectedCutScore;
                 }
                 if (isMakingCut) makingCutCount++;
                 
@@ -302,14 +321,19 @@ function renderUI(standings, isOver, hasCutOccurred, roundNum) {
                             ${(hasCutOccurred || roundNum > 2 || isOver) ? `<div class="player-projected">$${p.projectedPrize.toLocaleString()}</div>` : '<div></div>'}
                         </div>
                         <div class="player-rounds-container">
-                            ${p.allRounds.map(round => `
+                            ${p.allRounds.map(round => {
+                                const holesPlayed = round.holes.length;
+                                const scoreDisplay = round.displayValue && round.displayValue !== '-' ? `(${round.displayValue})` : '';
+                                const strokesDisplay = round.value > 0 ? round.value : '';
+                                
+                                return `
                                 <div class="player-round-info">
                                     <div class="round-status">
                                         <span>Round ${round.period}</span>
-                                        <span>${round.displayValue || 'E'}</span>
+                                        <span style="font-weight: bold;">${strokesDisplay} ${scoreDisplay}</span>
                                     </div>
                                     <div class="scorecard">
-                                        ${round.holes.length > 0 ? 
+                                        ${holesPlayed > 0 ? 
                                             round.holes.map(h => `
                                                 <div class="hole">
                                                     <div class="hole-num">${h.hole}</div>
@@ -320,7 +344,8 @@ function renderUI(standings, isOver, hasCutOccurred, roundNum) {
                                         }
                                     </div>
                                 </div>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </div>
                     </div>
                 `).join('')}
