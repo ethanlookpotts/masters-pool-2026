@@ -52,8 +52,25 @@ async function updateLeaderboard() {
 
         const competition = mastersEvent.competitions[0];
         const competitors = competition.competitors;
-        const isTournamentOver = competition.status?.type?.state === 'post';
         const globalRoundNum = competition.status?.period || 1;
+        const isTournamentOver = competition.status?.type?.state === 'post' && globalRoundNum >= 4;
+
+        const hasCutOccurred = competitors.some(c => c.status?.type?.id === "3");
+
+        let projectedCutScore = Infinity;
+        if (!hasCutOccurred && globalRoundNum <= 2) {
+            const sortedScores = competitors
+                .map(c => {
+                    const scoreStr = c.score?.displayValue || c.score;
+                    return scoreStr === 'E' ? 0 : (parseInt(scoreStr) || 0);
+                })
+                .sort((a, b) => a - b);
+            if (sortedScores.length >= 50) {
+                projectedCutScore = sortedScores[49];
+            } else if (sortedScores.length > 0) {
+                projectedCutScore = sortedScores[sortedScores.length - 1];
+            }
+        }
 
         const playerMap = {};
         competitors.forEach(c => {
@@ -115,27 +132,45 @@ async function updateLeaderboard() {
         for (const [drafter, players] of Object.entries(draftData)) {
             let totalProjected = 0;
             let totalActual = 0;
+            let makingCutCount = 0;
             
             const playerDetails = players.map(name => {
                 const live = playerMap[name] || { name: name, score: '-', rank: '-', thru: '-', isCut: false, roundScores: [] };
                 const prize = playerPrizes[name] || 0;
+                
+                let isMakingCut = false;
+                if (hasCutOccurred) {
+                    isMakingCut = !live.isCut;
+                } else {
+                    const scoreNum = live.score === 'E' ? 0 : (parseInt(live.score) || 0);
+                    isMakingCut = scoreNum <= projectedCutScore;
+                }
+                if (isMakingCut) makingCutCount++;
+                
                 totalProjected += prize;
                 if (isTournamentOver) totalActual += prize;
-                return { ...live, projectedPrize: prize };
+                return { ...live, projectedPrize: prize, isMakingCut };
             });
 
             teamStandings.push({
                 drafter,
                 totalProjected,
                 totalActual,
+                makingCutCount,
                 players: playerDetails
             });
         }
 
-        // Rank by projected unless tournament is over
-        teamStandings.sort((a, b) => b.totalProjected - a.totalProjected);
+        teamStandings.sort((a, b) => {
+            if (!isTournamentOver && !hasCutOccurred && globalRoundNum <= 2) {
+                if (b.makingCutCount !== a.makingCutCount) {
+                    return b.makingCutCount - a.makingCutCount;
+                }
+            }
+            return b.totalProjected - a.totalProjected;
+        });
 
-        renderUI(teamStandings, isTournamentOver);
+        renderUI(teamStandings, isTournamentOver, hasCutOccurred, globalRoundNum);
         lastUpdatedEl.innerText = `Last Updated: ${new Date().toLocaleTimeString()}`;
     } catch (err) {
         console.error("Update failed:", err);
@@ -180,7 +215,7 @@ function calculateProjectedPrizes(competitors) {
     return projectedPrizes;
 }
 
-function renderUI(standings, isOver) {
+function renderUI(standings, isOver, hasCutOccurred, roundNum) {
     const leaderboardEl = document.getElementById('pool-leaderboard');
     
     leaderboardEl.innerHTML = standings.map((team, index) => `
@@ -191,9 +226,15 @@ function renderUI(standings, isOver) {
                     <div class="drafter-name">${team.drafter}</div>
                 </div>
                 <div class="prizes-summary">
-                    <div class="projected-label">${isOver ? 'Final Prize' : 'Projected Prize'}</div>
-                    <div class="projected-amount">$${team.totalProjected.toLocaleString()}</div>
-                    ${!isOver ? `<div class="actual-amount">Actual: $${team.totalActual.toLocaleString()}</div>` : ''}
+                    ${!isOver ? `
+                    <div class="cut-indicator" style="font-size: 0.8rem; color: #666; margin-bottom: 2px;">
+                        ${(!hasCutOccurred && roundNum <= 2) ? `Proj. Cut: ${team.makingCutCount}/5` : `Made Cut: ${team.makingCutCount}/5`}
+                    </div>
+                    ` : ''}
+                    ${(hasCutOccurred || roundNum > 2 || isOver) ? `
+                        <div class="projected-label">${isOver ? 'Final Prize' : 'Projected Prize'}</div>
+                        <div class="projected-amount">$${team.totalProjected.toLocaleString()}</div>
+                    ` : ''}
                 </div>
                 <div class="caret"></div>
             </div>
@@ -204,19 +245,24 @@ function renderUI(standings, isOver) {
                     <div style="text-align:center">Score</div>
                     <div style="text-align:center">Rank</div>
                     <div style="text-align:center">Thru</div>
-                    <div style="text-align:right">Prize</div>
+                    ${(hasCutOccurred || roundNum > 2 || isOver) ? `<div style="text-align:right">Prize</div>` : '<div></div>'}
                 </div>
                 ${team.players.map(p => `
-                    <div class="player-item">
+                    <div class="player-item" style="${(!isOver && !p.isMakingCut && !hasCutOccurred) ? 'opacity: 0.7;' : (p.isCut ? 'opacity: 0.5;' : '')}">
                         <div class="player-main-info">
                             <div class="player-name-flag">
                                 <img class="flag-icon" src="${p.flag}" alt="">
-                                <div class="player-name">${p.name}</div>
+                                <div class="player-name">
+                                    ${p.name}
+                                    ${(!isOver && !hasCutOccurred && roundNum <= 2 && p.isMakingCut) ? '<span style="font-size:0.7rem; color: var(--augusta-green);">(Proj. Cut)</span>' : ''}
+                                    ${(!isOver && hasCutOccurred && !p.isCut) ? '<span style="font-size:0.7rem; color: var(--augusta-green);">(Made Cut)</span>' : ''}
+                                    ${(p.isCut) ? '<span style="font-size:0.7rem; color: #d32f2f;">(MC)</span>' : ''}
+                                </div>
                             </div>
                             <div class="player-score">${p.score}</div>
                             <div class="player-rank">${p.rank === 999 ? 'MC' : 'T' + p.rank}</div>
                             <div class="player-thru">${p.thru}</div>
-                            <div class="player-projected">$${p.projectedPrize.toLocaleString()}</div>
+                            ${(hasCutOccurred || roundNum > 2 || isOver) ? `<div class="player-projected">$${p.projectedPrize.toLocaleString()}</div>` : '<div></div>'}
                         </div>
                         <div class="player-rounds-container">
                             ${p.allRounds.map(round => `
