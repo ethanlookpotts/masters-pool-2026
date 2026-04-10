@@ -104,6 +104,10 @@ async function updateLeaderboard() {
             if (currentScoreStr === 'E' || currentScoreStr === 'even') numericScore = 0;
             else numericScore = parseInt(currentScoreStr.toString().replace('+', '')) || 0;
 
+            const isCut = statusType.id === "3" || 
+                          c.status?.displayValue?.includes("MC") || 
+                          c.status?.type?.description?.includes("Missed Cut");
+
             playerMap[name] = {
                 id: c.id,
                 name: name,
@@ -113,7 +117,7 @@ async function updateLeaderboard() {
                 rank: parseInt(c.curline || c.status?.position?.id || c.order) || 999,
                 status: statusType.name || "UNKNOWN", 
                 round: globalRoundNum,
-                isCut: statusType.id === "3",
+                isCut: isCut,
                 statusDisplay: c.status?.displayValue,
                 allRounds: allRounds,
                 thru: "--"
