@@ -428,29 +428,26 @@ function renderUI(standings, isOver, hasCutOccurred, roundNum, rankCounts) {
                     <div class="rank">#${index + 1}</div>
                     <div class="drafter-name">${team.drafter}</div>
                 </div>
-                <div class="prizes-summary">
-                    ${(!hasCutOccurred && roundNum <= 2) ? `
-                    <div class="cut-indicator" style="font-size: 0.8rem; color: #666; margin-bottom: 2px;">
-                        Proj. Cut: ${team.makingCutCount}/5
-                    </div>
-                    ` : `
-                    <div class="firepower-dots" title="Active Golfers: ${team.makingCutCount}/5">
-                        ${Array(5).fill(0).map((_, i) => `<span class="dot ${i < team.makingCutCount ? 'active' : 'cut'}"></span>`).join('')}
-                    </div>
-                    `}
-                    ${(hasCutOccurred || roundNum > 2 || isOver) ? `
-                        <div class="prize-split">
-                            <div class="prize-live">
-                                <div class="projected-label">${isOver ? 'Final Prize' : 'Live Projected'}</div>
-                                <div class="projected-amount">$${Math.round(team.livePrize).toLocaleString()}</div>
-                            </div>
-                            <div class="prize-locked">
-                                <div class="projected-label">Locked</div>
-                                <div class="locked-amount">$${Math.round(team.lockedPrize).toLocaleString()}</div>
-                            </div>
-                        </div>
-                    ` : ''}
+                
+                <div class="header-spacer"></div>
+
+                ${(!hasCutOccurred && roundNum <= 2) ? `
+                <div class="cut-indicator">
+                    Proj. Cut: ${team.makingCutCount}/5
                 </div>
+                ` : `
+                <div class="firepower-dots" title="Active Golfers: ${team.makingCutCount}/5">
+                    ${Array(5).fill(0).map((_, i) => `<span class="dot ${i < team.makingCutCount ? 'active' : 'cut'}"></span>`).join('')}
+                </div>
+                `}
+
+                ${(hasCutOccurred || roundNum > 2 || isOver) ? `
+                    <div class="prize-label-live">${isOver ? 'Final' : '<span class="full-label">Projected</span><span class="short-label">Proj.</span>'}</div>
+                    <div class="prize-amount-live">$${Math.round(team.livePrize).toLocaleString()}</div>
+                    <div class="prize-label-locked">Locked</div>
+                    <div class="prize-amount-locked">$${Math.round(team.lockedPrize).toLocaleString()}</div>
+                ` : ''}
+                
                 <div class="caret"></div>
             </div>
             <div class="card-details">
@@ -497,7 +494,7 @@ function renderUI(standings, isOver, hasCutOccurred, roundNum, rankCounts) {
                                                     <div class="hole-score ${getScoreClass(h.rel)}">${h.score}</div>
                                                 </div>
                                             `).join('') : 
-                                            `<div style="font-size: 0.65rem; color: #999;">Tee Time: ${round.teeTimeDisplay ? round.teeTimeDisplay : (round.teeTime ? round.teeTime.split(' ')[3].substring(0, 5) : 'N/A')}</div>`
+                                            `<div class="tee-time-display">Tee Time: ${round.teeTimeDisplay ? round.teeTimeDisplay : (round.teeTime ? round.teeTime.split(' ')[3].substring(0, 5) : 'N/A')}</div>`
                                         }
                                     </div>
                                 </div>
@@ -578,14 +575,12 @@ function renderFieldModal(rankCounts) {
         cutLineIndex = sortedField.findIndex(p => p.numericScore > cutInfo.score);
     }
 
-    // Limit the list: show everyone above cut, plus 10 below
+    // Limit the list: show everyone above cut if occurred, otherwise top 50 + 10 below
     let playersToShow = sortedField;
-    if (cutLineIndex !== -1) {
-        if (cutInfo.hasOccurred) {
-            playersToShow = sortedField.slice(0, cutLineIndex);
-        } else {
-            playersToShow = sortedField.slice(0, cutLineIndex + 10);
-        }
+    if (cutInfo.hasOccurred) {
+        playersToShow = sortedField.filter(p => !p.isCut);
+    } else if (cutLineIndex !== -1) {
+        playersToShow = sortedField.slice(0, cutLineIndex + 10);
     }
 
     let html = `
