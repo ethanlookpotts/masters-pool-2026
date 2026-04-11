@@ -40,15 +40,18 @@ async function init() {
     fieldBtn.onclick = () => {
         renderFieldModal();
         modal.style.display = "block";
+        document.body.style.overflow = "hidden";
     };
 
     closeBtn.onclick = () => {
         modal.style.display = "none";
+        document.body.style.overflow = "auto";
     };
 
     window.onclick = (event) => {
         if (event.target == modal) {
             modal.style.display = "none";
+            document.body.style.overflow = "auto";
         }
     };
 
@@ -77,11 +80,12 @@ async function updateLeaderboard() {
         const globalRoundNum = competition.status?.period || 1;
         const isTournamentOver = competition.status?.type?.state === 'post' && globalRoundNum >= 4;
 
-        const hasCutOccurred = competitors.some(c => c.status?.type?.id === "3");
+        const hasCutOccurred = globalRoundNum > 2 || competitors.some(c => c.status?.type?.id === "3");
         cutInfo.hasOccurred = hasCutOccurred;
 
+        const espnHasCutStatus = competitors.some(c => c.status?.type?.id === "3");
         let projectedCutScore = Infinity;
-        if (hasCutOccurred) {
+        if (espnHasCutStatus) {
             // If cut occurred, find the worst score of someone who made it
             const madeCut = competitors.filter(c => c.status?.type?.id !== "3" && !c.status?.displayValue?.includes("MC"));
             if (madeCut.length > 0) {
@@ -112,9 +116,13 @@ async function updateLeaderboard() {
 
         // Display cut line in header
         const cutDisplayEl = document.getElementById('cut-line-display');
-        const cutPrefix = hasCutOccurred ? "Final Cut" : "Projected Cut";
-        const cutScoreFormatted = projectedCutScore === 0 ? "E" : (projectedCutScore > 0 ? `+${projectedCutScore}` : projectedCutScore);
-        cutDisplayEl.innerText = `${cutPrefix}: ${cutScoreFormatted}`;
+        if (hasCutOccurred) {
+            cutDisplayEl.style.display = 'none';
+        } else {
+            const cutScoreFormatted = projectedCutScore === 0 ? "E" : (projectedCutScore > 0 ? `+${projectedCutScore}` : projectedCutScore);
+            cutDisplayEl.innerText = `Projected Cut: ${cutScoreFormatted}`;
+            cutDisplayEl.style.display = 'inline-block';
+        }
 
         const playerMap = {};
         const draftedNames = new Set(Object.values(draftData).flat());
@@ -143,9 +151,21 @@ async function updateLeaderboard() {
             if (currentScoreStr === 'E' || currentScoreStr === 'even') numericScore = 0;
             else numericScore = parseInt(currentScoreStr.toString().replace('+', '')) || 0;
 
+            // Calculate weekend score (clean slate)
+            let weekendNumericScore = 0;
+            if (hasCutOccurred || globalRoundNum > 2) {
+                const weekendRoundsList = allRounds.filter(r => r.period > 2);
+                weekendNumericScore = weekendRoundsList.reduce((total, r) => {
+                    if (!r.displayValue || r.displayValue === '-' || r.displayValue === 'E' || r.displayValue === 'even') return total;
+                    return total + (parseInt(r.displayValue.toString().replace('+', '')) || 0);
+                }, 0);
+            }
+            const weekendScoreStr = weekendNumericScore === 0 ? 'E' : (weekendNumericScore > 0 ? `+${weekendNumericScore}` : weekendNumericScore.toString());
+
             const isCut = statusType.id === "3" || 
                           c.status?.displayValue?.includes("MC") || 
-                          c.status?.type?.description?.includes("Missed Cut");
+                          c.status?.type?.description?.includes("Missed Cut") ||
+                          (hasCutOccurred && !espnHasCutStatus && numericScore > projectedCutScore);
 
             const playerData = {
                 id: c.id,
@@ -153,6 +173,8 @@ async function updateLeaderboard() {
                 flag: c.athlete.flag?.href || "",
                 score: currentScoreStr,
                 numericScore: numericScore,
+                weekendScore: weekendScoreStr,
+                weekendNumericScore: weekendNumericScore,
                 rank: parseInt(c.curline || c.status?.position?.id || c.order) || (isCut ? 999 : 998),
                 status: statusType.name || "UNKNOWN", 
                 round: globalRoundNum,
@@ -214,7 +236,6 @@ async function updateLeaderboard() {
                     p.thru = currentRound.teeTimeDisplay;
                 } else if (currentRound?.teeTime) {
                     const timeParts = currentRound.teeTime.split(' ');
-                    // "Fri Apr 10 12:32:00 PDT 2026"
                     const timeIdx = timeParts.findIndex(tp => tp.includes(':'));
                     if (timeIdx !== -1) {
                         p.thru = timeParts[timeIdx].substring(0, 5); 
@@ -247,6 +268,8 @@ async function updateLeaderboard() {
             let totalProjected = 0;
             let totalActual = 0;
             let makingCutCount = 0;
+            let lockedPrize = 0;
+            let livePrize = 0;
             
             const playerDetails = players.map(name => {
                 const live = playerMap[name] || { name: name, score: '-', rank: '-', thru: '-', isCut: false, roundScores: [] };
@@ -258,7 +281,12 @@ async function updateLeaderboard() {
                 } else {
                     isMakingCut = live.numericScore <= projectedCutScore;
                 }
-                if (isMakingCut) makingCutCount++;
+                if (isMakingCut) {
+                    makingCutCount++;
+                    livePrize += prize;
+                } else {
+                    lockedPrize += prize;
+                }
                 
                 totalProjected += prize;
                 if (isTournamentOver) totalActual += prize;
@@ -270,6 +298,8 @@ async function updateLeaderboard() {
                 totalProjected,
                 totalActual,
                 makingCutCount,
+                lockedPrize,
+                livePrize,
                 players: playerDetails
             });
         }
@@ -286,11 +316,11 @@ async function updateLeaderboard() {
         renderUI(teamStandings, isTournamentOver, hasCutOccurred, globalRoundNum, rankCounts);
         lastUpdatedEl.innerText = `Last Updated: ${new Date().toLocaleTimeString()}`;
 
-        // Update modal listener to pass rankCounts
         const fieldBtn = document.getElementById('field-rankings-btn');
         fieldBtn.onclick = () => {
             renderFieldModal(rankCounts);
             document.getElementById('field-modal').style.display = "block";
+            document.body.style.overflow = "hidden";
         };
     } catch (err) {
         console.error("Update failed:", err);
@@ -308,9 +338,16 @@ function calculatePrizesAndRanks(competitors) {
         return parseInt(s?.toString().replace('+', '')) || 0;
     };
 
+    const isPlayerCut = (c) => {
+        return c.status?.type?.id === "3" || 
+               c.status?.displayValue?.includes("MC") || 
+               c.status?.type?.description?.includes("Missed Cut") ||
+               (cutInfo.hasOccurred && getScoreValue(c) > cutInfo.score);
+    };
+
     const sorted = [...competitors].sort((a, b) => {
-        const isCutA = a.status?.type?.id === "3" || a.status?.displayValue?.includes("MC") || a.status?.type?.description?.includes("Missed Cut");
-        const isCutB = b.status?.type?.id === "3" || b.status?.displayValue?.includes("MC") || b.status?.type?.description?.includes("Missed Cut");
+        const isCutA = isPlayerCut(a);
+        const isCutB = isPlayerCut(b);
         if (isCutA && !isCutB) return 1;
         if (!isCutA && isCutB) return -1;
         return getScoreValue(a) - getScoreValue(b);
@@ -321,7 +358,7 @@ function calculatePrizesAndRanks(competitors) {
     let currentRank = 1;
     
     sorted.forEach((c, idx) => {
-        const isCut = c.status?.type?.id === "3" || c.status?.displayValue?.includes("MC") || c.status?.type?.description?.includes("Missed Cut");
+        const isCut = isPlayerCut(c);
         const name = c.athlete.displayName;
         if (isCut) {
             ranks[name] = 999;
@@ -353,7 +390,7 @@ function calculatePrizesAndRanks(competitors) {
 
     competitors.forEach(c => {
         const name = c.athlete.displayName;
-        const isCut = c.status?.type?.id === "3" || c.status?.displayValue?.includes("MC") || c.status?.type?.description?.includes("Missed Cut");
+        const isCut = isPlayerCut(c);
         if (isCut) {
             prizes[name] = prizeTable.cut;
         }
@@ -372,7 +409,19 @@ function formatRank(rank, counts) {
 function renderUI(standings, isOver, hasCutOccurred, roundNum, rankCounts) {
     const leaderboardEl = document.getElementById('pool-leaderboard');
     
-    leaderboardEl.innerHTML = standings.map((team, index) => `
+    leaderboardEl.innerHTML = standings.map((team, index) => {
+        const activePlayers = [];
+        const cutPlayers = [];
+        if (hasCutOccurred || roundNum > 2 || isOver) {
+            team.players.forEach(p => {
+                if (p.isMakingCut) activePlayers.push(p);
+                else cutPlayers.push(p);
+            });
+        } else {
+            activePlayers.push(...team.players);
+        }
+
+        return `
         <div class="pool-card ${index === 0 ? 'winner' : ''} ${expandedTeams.has(team.drafter) ? 'expanded' : ''}" data-drafter="${team.drafter}">
             <div class="card-summary">
                 <div class="rank-drafter">
@@ -380,46 +429,56 @@ function renderUI(standings, isOver, hasCutOccurred, roundNum, rankCounts) {
                     <div class="drafter-name">${team.drafter}</div>
                 </div>
                 <div class="prizes-summary">
-                    ${!isOver ? `
+                    ${(!hasCutOccurred && roundNum <= 2) ? `
                     <div class="cut-indicator" style="font-size: 0.8rem; color: #666; margin-bottom: 2px;">
-                        ${(!hasCutOccurred && roundNum <= 2) ? `Proj. Cut: ${team.makingCutCount}/5` : `Made Cut: ${team.makingCutCount}/5`}
+                        Proj. Cut: ${team.makingCutCount}/5
                     </div>
-                    ` : ''}
+                    ` : `
+                    <div class="firepower-dots" title="Active Golfers: ${team.makingCutCount}/5">
+                        ${Array(5).fill(0).map((_, i) => `<span class="dot ${i < team.makingCutCount ? 'active' : 'cut'}"></span>`).join('')}
+                    </div>
+                    `}
                     ${(hasCutOccurred || roundNum > 2 || isOver) ? `
-                        <div class="projected-label">${isOver ? 'Final Prize' : 'Projected Prize'}</div>
-                        <div class="projected-amount">$${team.totalProjected.toLocaleString()}</div>
+                        <div class="prize-split">
+                            <div class="prize-live">
+                                <div class="projected-label">${isOver ? 'Final Prize' : 'Live Projected'}</div>
+                                <div class="projected-amount">$${Math.round(team.livePrize).toLocaleString()}</div>
+                            </div>
+                            <div class="prize-locked">
+                                <div class="projected-label">Locked</div>
+                                <div class="locked-amount">$${Math.round(team.lockedPrize).toLocaleString()}</div>
+                            </div>
+                        </div>
                     ` : ''}
                 </div>
                 <div class="caret"></div>
             </div>
             <div class="card-details">
-                <h4 style="margin: 1rem 0 0.5rem 0; color: var(--augusta-green); font-size: 0.9rem; text-transform: uppercase;">Team Details</h4>
+                <h4 style="margin: 1rem 0 0.5rem 0; color: var(--augusta-green); font-size: 0.9rem; text-transform: uppercase;">${(hasCutOccurred || roundNum > 2) ? 'Weekend Roster' : 'Team Details'}</h4>
                 <div class="player-header">
                     <div>Player</div>
                     <div style="text-align:center">Score</div>
                     <div style="text-align:center">Rank</div>
                     <div style="text-align:center">Thru</div>
-                    ${(hasCutOccurred || roundNum > 2 || isOver) ? `<div style="text-align:right">Prize</div>` : '<div></div>'}
+                    ${(hasCutOccurred || roundNum > 2 || isOver) ? `<div style="text-align:right" class="prize-header">Prize</div>` : '<div class="prize-header"></div>'}
                 </div>
-                ${team.players.map(p => `
-                    <div class="player-item" style="${(!isOver && !p.isMakingCut && !hasCutOccurred) ? 'opacity: 0.7;' : (p.isCut ? 'opacity: 0.5;' : '')}">
+                ${activePlayers.map(p => `
+                    <div class="player-item" style="${(!isOver && !p.isMakingCut && !hasCutOccurred) ? 'opacity: 0.7;' : ''}">
                         <div class="player-main-info">
                             <div class="player-name-flag">
                                 <img class="flag-icon" src="${p.flag}" alt="">
                                 <div class="player-name">
                                     ${p.name}
                                     ${(!isOver && !hasCutOccurred && roundNum <= 2 && p.isMakingCut) ? '<span style="font-size:0.7rem; color: var(--augusta-green);">(Proj. Cut)</span>' : ''}
-                                    ${(!isOver && hasCutOccurred && !p.isCut) ? '<span style="font-size:0.7rem; color: var(--augusta-green);">(Made Cut)</span>' : ''}
-                                    ${(p.isCut) ? '<span style="font-size:0.7rem; color: #d32f2f;">(MC)</span>' : ''}
                                 </div>
                             </div>
                             <div class="player-score">${p.score}</div>
                             <div class="player-rank">${formatRank(p.rank, rankCounts)}</div>
                             <div class="player-thru">${p.thru}</div>
-                            ${(hasCutOccurred || roundNum > 2 || isOver) ? `<div class="player-projected">$${p.projectedPrize.toLocaleString()}</div>` : '<div></div>'}
+                            ${(hasCutOccurred || roundNum > 2 || isOver) ? `<div class="player-projected">$${Math.round(p.projectedPrize).toLocaleString()}</div>` : '<div class="player-projected"></div>'}
                         </div>
                         <div class="player-rounds-container">
-                            ${p.allRounds.map(round => {
+                            ${[...p.allRounds].reverse().map(round => {
                                 const holesPlayed = round.holes.length;
                                 const scoreDisplay = round.displayValue && round.displayValue !== '-' ? `(${round.displayValue})` : '';
                                 const strokesDisplay = round.value > 0 ? round.value : '';
@@ -447,9 +506,31 @@ function renderUI(standings, isOver, hasCutOccurred, roundNum, rankCounts) {
                         </div>
                     </div>
                 `).join('')}
+                
+                ${cutPlayers.length > 0 ? `
+                    <h4 class="roster-section-title" style="margin: 1.5rem 0 0.5rem 0; color: #666; font-size: 0.9rem; text-transform: uppercase; border-top: 1px dashed #ccc; padding-top: 1rem;">Missed Cut</h4>
+                    ${cutPlayers.map(p => `
+                        <div class="player-item condensed" style="padding: 0.5rem 0; border-bottom: 1px solid #f5f5f5;">
+                            <div class="player-main-info" style="margin-bottom: 0;">
+                                <div class="player-name-flag">
+                                    <img class="flag-icon" src="${p.flag}" alt="" style="opacity:0.5">
+                                    <div class="player-name" style="opacity:0.6; font-size: 0.9rem;">
+                                        ${p.name}
+                                        <span style="font-size:0.7rem; color: #d32f2f; font-weight: bold; margin-left: 4px;">[MC]</span>
+                                    </div>
+                                </div>
+                                <div class="player-score" style="opacity:0.6; font-size: 0.9rem;">${p.score}</div>
+                                <div class="player-rank" style="opacity:0.6; font-size: 0.9rem;">MC</div>
+                                <div class="player-thru" style="opacity:0.6; font-size: 0.9rem;">--</div>
+                                <div class="player-projected" style="color: #888; font-size: 0.9rem;">$${Math.round(p.projectedPrize).toLocaleString()}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                ` : ''}
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 
     // Add click listeners for expansion
     document.querySelectorAll('.card-summary').forEach(summary => {
@@ -489,15 +570,23 @@ function renderFieldModal(rankCounts) {
     let cutLineIndex = -1;
     if (cutInfo.hasOccurred) {
         cutLineIndex = sortedField.findIndex(p => p.isCut);
+        if (cutLineIndex === -1) {
+            cutLineIndex = sortedField.findIndex(p => p.numericScore > cutInfo.score);
+        }
     } else {
         // Find first player whose score is worse than projected cut
         cutLineIndex = sortedField.findIndex(p => p.numericScore > cutInfo.score);
     }
 
     // Limit the list: show everyone above cut, plus 10 below
-    const playersToShow = cutLineIndex !== -1 ? 
-        sortedField.slice(0, cutLineIndex + 10) : 
-        sortedField;
+    let playersToShow = sortedField;
+    if (cutLineIndex !== -1) {
+        if (cutInfo.hasOccurred) {
+            playersToShow = sortedField.slice(0, cutLineIndex);
+        } else {
+            playersToShow = sortedField.slice(0, cutLineIndex + 10);
+        }
+    }
 
     let html = `
         <table class="field-table">
@@ -514,17 +603,21 @@ function renderFieldModal(rankCounts) {
 
     playersToShow.forEach((p, idx) => {
         const drafter = getDrafterForPlayer(p.name);
-        const drafterLabel = drafter ? `<span class="drafter-label">${drafter}</span>` : '';
+        const drafterLabel = drafter ? `<span class="drafter-label" style="flex-shrink: 0; padding: 1px 3px; font-size: 0.55rem; margin-left: 3px;">${drafter}</span>` : '';
         const isBelowCut = cutLineIndex !== -1 && idx >= cutLineIndex;
         const rowClass = isBelowCut ? 'outside-cut' : '';
 
+        // Format name to "F. Last"
+        const nameParts = p.name.split(' ');
+        const displayName = nameParts.length > 1 ? `${nameParts[0][0]}. ${nameParts.slice(1).join(' ')}` : p.name;
+
         // If this is the cut line position, insert a special row
-        if (idx === cutLineIndex && cutLineIndex !== -1) {
+        if (idx === cutLineIndex && cutLineIndex !== -1 && !cutInfo.hasOccurred) {
             html += `
                 <tr class="cut-line-row-separator">
-                    <td colspan="4" style="text-align:center; padding: 10px 0;">
+                    <td colspan="4" style="text-align:center; padding: 6px 0;">
                         <div style="border-bottom: 2px dashed #d32f2f; position: relative; height: 10px;">
-                            <span style="position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); background: var(--cream-bg); padding: 0 15px; color: #d32f2f; font-weight: 800; font-size: 0.7rem; letter-spacing: 1px;">CUT LINE</span>
+                            <span style="position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); background: var(--cream-bg); padding: 0 10px; color: #d32f2f; font-weight: 800; font-size: 0.6rem; letter-spacing: 1px;">CUT LINE</span>
                         </div>
                     </td>
                 </tr>
@@ -533,16 +626,16 @@ function renderFieldModal(rankCounts) {
 
         html += `
             <tr class="${rowClass}">
-                <td class="rank-cell">${formatRank(p.rank, rankCounts)}</td>
-                <td class="name-cell">
-                    <div style="display:flex; align-items:center; gap: 6px;">
-                        <img class="flag-icon" src="${p.flag}" alt="" style="flex-shrink:0;">
-                        <span class="field-player-name">${p.name}</span>
+                <td class="rank-cell" style="padding: 0.4rem 4px;">${formatRank(p.rank, rankCounts)}</td>
+                <td class="name-cell" style="padding: 0.4rem 4px;">
+                    <div style="display:flex; align-items:center; gap: 4px;">
+                        <img class="flag-icon" src="${p.flag}" alt="" style="flex-shrink:0; width: 16px; height: 11px;">
+                        <span class="field-player-name" style="font-size: 0.8rem;">${displayName}</span>
                         ${drafterLabel}
                     </div>
                 </td>
-                <td class="score-cell">${p.score}</td>
-                <td class="thru-cell">${p.thru}</td>
+                <td class="score-cell" style="padding: 0.4rem 4px;">${p.score}</td>
+                <td class="thru-cell" style="padding: 0.4rem 4px;">${p.thru}</td>
             </tr>
         `;
     });
