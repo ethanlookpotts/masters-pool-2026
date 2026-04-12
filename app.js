@@ -32,23 +32,29 @@ const prizeTable = {
 let expandedTeams = new Set();
 let fullField = [];
 let cutInfo = { score: 0, hasOccurred: false };
+let fieldModalFilter = 'all'; // 'all' | 'drafted'
+let lastFetchAt = null;
+let latestCompetitors = null;
+let latestRankCounts = {};
+
+const AUTO_REFRESH_MS = 60_000;
 
 async function init() {
-    document.getElementById('refresh-btn').addEventListener('click', updateLeaderboard);
+    document.getElementById('refresh-btn').addEventListener('click', () => updateLeaderboard());
 
-    const fieldModal = document.getElementById('field-modal');
-    const fieldBtn = document.getElementById('field-rankings-btn');
-    const helpModal = document.getElementById('help-modal');
-    const helpBtn = document.getElementById('help-btn');
-
-    fieldBtn.onclick = () => {
-        renderFieldModal();
-        openModal(fieldModal);
+    document.getElementById('field-rankings-btn').onclick = () => {
+        renderFieldModal(latestRankCounts);
+        openModal(document.getElementById('field-modal'));
     };
 
-    helpBtn.onclick = () => {
+    document.getElementById('scenarios-btn').onclick = () => {
+        renderScenariosModal();
+        openModal(document.getElementById('scenarios-modal'));
+    };
+
+    document.getElementById('help-btn').onclick = () => {
         renderHelpModal();
-        openModal(helpModal);
+        openModal(document.getElementById('help-modal'));
     };
 
     document.querySelectorAll('.close-modal').forEach(btn => {
@@ -64,6 +70,21 @@ async function init() {
     });
 
     await updateLeaderboard();
+
+    setInterval(updateLeaderboard, AUTO_REFRESH_MS);
+    setInterval(updateTimeSince, 10_000);
+}
+
+function updateTimeSince() {
+    if (!lastFetchAt) return;
+    const el = document.getElementById('last-updated');
+    const secs = Math.round((Date.now() - lastFetchAt) / 1000);
+    let text;
+    if (secs < 10) text = "just now";
+    else if (secs < 60) text = `${secs}s ago`;
+    else if (secs < 3600) text = `${Math.round(secs / 60)}m ago`;
+    else text = `${Math.round(secs / 3600)}h ago`;
+    el.innerText = `Updated ${text}`;
 }
 
 function openModal(modal) {
@@ -102,10 +123,16 @@ function renderHelpModal() {
         </section>
 
         <section class="help-section">
-            <h3>Projected vs Locked</h3>
-            <p><strong>Projected</strong> — live earnings based on the current leaderboard. Updates as scores change.</p>
-            <p><strong>Locked</strong> — finalized earnings from golfers who already missed the cut ($25k each). Can't change.</p>
-            <p>Pre-cut, teams rank first by projected golfers making cut, then projected $. Post-cut, by projected $ only.</p>
+            <h3>Team Total &amp; Locked</h3>
+            <p>The big number on each team card is the <strong>projected final total</strong> — the sum of what all 5 golfers would earn if the tournament ended now.</p>
+            <p>"$X locked in" shows how much of that total is already <strong>guaranteed</strong> from golfers who missed the cut ($25k each). The rest can still move as scores change.</p>
+            <p>Gap under the total shows how far behind (or how many are ahead of) #1.</p>
+            <p>Pre-cut, teams rank first by projected golfers making the cut, then by total $. Post-cut, by total $ only.</p>
+        </section>
+
+        <section class="help-section">
+            <h3>Scenarios</h3>
+            <p>Tap <strong>Scenarios</strong> in the header to see how each team would finish if a particular top-remaining golfer wins. Useful on Sunday.</p>
         </section>
 
         <section class="help-section">
@@ -133,16 +160,13 @@ function renderHelpModal() {
 }
 
 async function updateLeaderboard() {
-    const lastUpdatedEl = document.getElementById('last-updated');
     const refreshBtn = document.getElementById('refresh-btn');
-    
-    refreshBtn.disabled = true;
-    refreshBtn.innerText = "Refreshing...";
+    refreshBtn.classList.add('refreshing');
 
     try {
         const response = await fetch(ESPN_API);
         const data = await response.json();
-        
+
         const mastersEvent = data.events.find(e => e.name.toLowerCase().includes('masters'));
         if (!mastersEvent) {
             document.getElementById('pool-leaderboard').innerHTML = "<div class='loading'>Masters event not found.</div>";
@@ -151,8 +175,11 @@ async function updateLeaderboard() {
 
         const competition = mastersEvent.competitions[0];
         const competitors = competition.competitors;
+        latestCompetitors = competitors;
         const globalRoundNum = competition.status?.period || 1;
-        const isTournamentOver = competition.status?.type?.state === 'post' && globalRoundNum >= 4;
+        const statusState = competition.status?.type?.state;
+        const isTournamentOver = statusState === 'post' && globalRoundNum >= 4;
+        renderTournamentStatus(statusState, globalRoundNum, isTournamentOver);
 
         const hasCutOccurred = globalRoundNum > 2 || competitors.some(c => c.status?.type?.id === "3");
         cutInfo.hasOccurred = hasCutOccurred;
@@ -340,15 +367,14 @@ async function updateLeaderboard() {
         const teamStandings = [];
         for (const [drafter, players] of Object.entries(draftData)) {
             let totalProjected = 0;
-            let totalActual = 0;
             let makingCutCount = 0;
             let lockedPrize = 0;
             let livePrize = 0;
-            
+
             const playerDetails = players.map(name => {
-                const live = playerMap[name] || { name: name, score: '-', rank: '-', thru: '-', isCut: false, roundScores: [] };
+                const live = playerMap[name] || { name: name, score: '-', rank: '-', thru: '-', isCut: false, allRounds: [] };
                 const prize = playerPrizes[name] || 0;
-                
+
                 let isMakingCut = false;
                 if (hasCutOccurred) {
                     isMakingCut = !live.isCut;
@@ -361,20 +387,23 @@ async function updateLeaderboard() {
                 } else {
                     lockedPrize += prize;
                 }
-                
+
                 totalProjected += prize;
-                if (isTournamentOver) totalActual += prize;
                 return { ...live, projectedPrize: prize, isMakingCut };
             });
+
+            const topContributor = findTopContributor(playerDetails, hasCutOccurred);
+            const roundBreakdown = computeRoundBreakdown(playerDetails);
 
             teamStandings.push({
                 drafter,
                 totalProjected,
-                totalActual,
                 makingCutCount,
                 lockedPrize,
                 livePrize,
-                players: playerDetails
+                players: playerDetails,
+                topContributor,
+                roundBreakdown
             });
         }
 
@@ -387,22 +416,53 @@ async function updateLeaderboard() {
             return b.totalProjected - a.totalProjected;
         });
 
+        latestRankCounts = rankCounts;
         renderUI(teamStandings, isTournamentOver, hasCutOccurred, globalRoundNum, rankCounts);
-        lastUpdatedEl.innerText = `Last Updated: ${new Date().toLocaleTimeString()}`;
 
-        const fieldBtn = document.getElementById('field-rankings-btn');
-        fieldBtn.onclick = () => {
-            renderFieldModal(rankCounts);
-            document.getElementById('field-modal').style.display = "block";
-            document.body.style.overflow = "hidden";
-        };
+        lastFetchAt = Date.now();
+        updateTimeSince();
     } catch (err) {
         console.error("Update failed:", err);
-        lastUpdatedEl.innerText = "Update failed. Try again.";
+        document.getElementById('last-updated').innerText = "Update failed. Retrying…";
     } finally {
-        refreshBtn.disabled = false;
-        refreshBtn.innerText = "Refresh Leaderboard";
+        refreshBtn.classList.remove('refreshing');
     }
+}
+
+function renderTournamentStatus(state, roundNum, isOver) {
+    const el = document.getElementById('tournament-status');
+    if (!el) return;
+    let text = '';
+    let cls = 'tournament-status';
+    if (isOver) { text = 'Final'; cls += ' final'; }
+    else if (state === 'pre') { text = `Round ${roundNum} · Scheduled`; cls += ' scheduled'; }
+    else if (state === 'in') { text = `Round ${roundNum} · Live`; cls += ' live'; }
+    else { text = `Round ${roundNum}`; }
+    el.innerText = text;
+    el.className = cls;
+}
+
+function findTopContributor(players, hasCutOccurred) {
+    const active = players.filter(p => !p.isCut && typeof p.numericScore === 'number');
+    if (!active.length) return null;
+    const best = active.reduce((a, b) => (a.numericScore <= b.numericScore ? a : b));
+    return best;
+}
+
+function computeRoundBreakdown(players) {
+    const rounds = [1, 2, 3, 4];
+    return rounds.map(r => {
+        let total = 0;
+        let hasData = false;
+        players.forEach(p => {
+            const round = p.allRounds?.find(rd => rd.period === r);
+            if (round && round.value && round.holes?.length === 18) {
+                total += parseInt(round.displayValue?.replace('+', '')) || 0;
+                hasData = true;
+            }
+        });
+        return { round: r, total: hasData ? total : null };
+    });
 }
 
 function calculatePrizesAndRanks(competitors) {
@@ -493,11 +553,12 @@ function formatRank(rank, counts) {
 
 function renderUI(standings, isOver, hasCutOccurred, roundNum, rankCounts) {
     const leaderboardEl = document.getElementById('pool-leaderboard');
-    
+    const showPrizes = hasCutOccurred || roundNum > 2 || isOver;
+
     leaderboardEl.innerHTML = standings.map((team, index) => {
         const activePlayers = [];
         const cutPlayers = [];
-        if (hasCutOccurred || roundNum > 2 || isOver) {
+        if (showPrizes) {
             team.players.forEach(p => {
                 if (p.isMakingCut) activePlayers.push(p);
                 else cutPlayers.push(p);
@@ -506,37 +567,55 @@ function renderUI(standings, isOver, hasCutOccurred, roundNum, rankCounts) {
             activePlayers.push(...team.players);
         }
 
+        const rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : '';
+        const total = Math.round(team.totalProjected);
+        const leadingBadge = index === 0
+            ? `<div class="leading-badge">${isOver ? 'CHAMPION' : 'LEADING'}</div>`
+            : '';
+
+        const topC = team.topContributor;
+        const topContribHtml = topC
+            ? `<div class="top-contributor" title="Team leader">
+                <span class="tc-label">Top:</span>
+                <span class="tc-name">${shortName(topC.name)}</span>
+                <span class="tc-score">${topC.score}</span>
+                <span class="tc-rank">${formatRank(topC.rank, rankCounts)}</span>
+               </div>`
+            : '';
+
+        const dotsHtml = `
+            <div class="firepower" title="Golfers still in: ${team.makingCutCount}/5">
+                <div class="firepower-dots">
+                    ${Array(5).fill(0).map((_, i) => `<span class="dot ${i < team.makingCutCount ? 'active' : 'cut'}"></span>`).join('')}
+                </div>
+                <div class="firepower-label">${team.makingCutCount}/5 ${showPrizes ? 'in' : 'proj.'}</div>
+            </div>`;
+
+        const prizeBlockHtml = showPrizes
+            ? `<div class="prize-block">
+                <div class="total-amount">$${total.toLocaleString()}</div>
+                ${leadingBadge}
+                ${team.lockedPrize > 0 ? `<div class="locked-note">$${Math.round(team.lockedPrize).toLocaleString()} locked in</div>` : ''}
+               </div>`
+            : `<div class="prize-block">
+                <div class="pre-cut-note">${team.makingCutCount}/5 projected to make cut</div>
+               </div>`;
+
         return `
-        <div class="pool-card ${index === 0 ? 'winner' : ''} ${expandedTeams.has(team.drafter) ? 'expanded' : ''}" data-drafter="${team.drafter}">
+        <div class="pool-card ${rankClass} ${expandedTeams.has(team.drafter) ? 'expanded' : ''}" data-drafter="${team.drafter}">
             <div class="card-summary">
                 <div class="rank-drafter">
                     <div class="rank">#${index + 1}</div>
                     <div class="drafter-name">${team.drafter}</div>
                 </div>
-                
-                <div class="header-spacer"></div>
-
-                ${(!hasCutOccurred && roundNum <= 2) ? `
-                <div class="cut-indicator">
-                    Proj. Cut: ${team.makingCutCount}/5
-                </div>
-                ` : `
-                <div class="firepower-dots" title="Active Golfers: ${team.makingCutCount}/5">
-                    ${Array(5).fill(0).map((_, i) => `<span class="dot ${i < team.makingCutCount ? 'active' : 'cut'}"></span>`).join('')}
-                </div>
-                `}
-
-                ${(hasCutOccurred || roundNum > 2 || isOver) ? `
-                    <div class="prize-label-live">${isOver ? 'Final' : '<span class="full-label">Projected</span><span class="short-label">Proj.</span>'}</div>
-                    <div class="prize-amount-live">$${Math.round(team.livePrize).toLocaleString()}</div>
-                    <div class="prize-label-locked">Locked</div>
-                    <div class="prize-amount-locked">$${Math.round(team.lockedPrize).toLocaleString()}</div>
-                ` : ''}
-                
+                ${topContribHtml}
+                ${dotsHtml}
+                ${prizeBlockHtml}
                 <div class="caret"></div>
             </div>
             <div class="card-details">
-                <h4 style="margin: 1rem 0 0.5rem 0; color: var(--augusta-green); font-size: 0.9rem; text-transform: uppercase;">${(hasCutOccurred || roundNum > 2) ? 'Weekend Roster' : 'Team Details'}</h4>
+                ${renderRoundBreakdownHtml(team.roundBreakdown)}
+                <h4 class="roster-heading">${(hasCutOccurred || roundNum > 2) ? 'Weekend Roster' : 'Team Details'}</h4>
                 <div class="player-header">
                     <div>Player</div>
                     <div style="text-align:center">Score</div>
@@ -639,7 +718,8 @@ function getDrafterForPlayer(playerName) {
 
 function renderFieldModal(rankCounts) {
     const listEl = document.getElementById('field-rankings-list');
-    
+    const draftedSet = new Set(Object.values(draftData).flat());
+
     // Sort field: first by rank, then by score
     const sortedField = [...fullField].sort((a, b) => {
         if (a.isCut && !b.isCut) return 1;
@@ -660,15 +740,22 @@ function renderFieldModal(rankCounts) {
         cutLineIndex = sortedField.findIndex(p => p.numericScore > cutInfo.score);
     }
 
-    // Limit the list: show everyone above cut if occurred, otherwise top 50 + 10 below
+    // Limit the list based on filter + cut
     let playersToShow = sortedField;
-    if (cutInfo.hasOccurred) {
+    if (fieldModalFilter === 'drafted') {
+        playersToShow = sortedField.filter(p => draftedSet.has(p.name));
+        cutLineIndex = -1; // don't show cut-line separator in drafted-only view
+    } else if (cutInfo.hasOccurred) {
         playersToShow = sortedField.filter(p => !p.isCut);
     } else if (cutLineIndex !== -1) {
         playersToShow = sortedField.slice(0, cutLineIndex + 10);
     }
 
     let html = `
+        <div class="field-toggle">
+            <button class="field-toggle-btn ${fieldModalFilter === 'all' ? 'active' : ''}" data-filter="all">Full Field</button>
+            <button class="field-toggle-btn ${fieldModalFilter === 'drafted' ? 'active' : ''}" data-filter="drafted">Drafted Only</button>
+        </div>
         <table class="field-table">
             <thead>
                 <tr>
@@ -726,6 +813,13 @@ function renderFieldModal(rankCounts) {
     `;
 
     listEl.innerHTML = html;
+
+    listEl.querySelectorAll('.field-toggle-btn').forEach(btn => {
+        btn.onclick = () => {
+            fieldModalFilter = btn.dataset.filter;
+            renderFieldModal(rankCounts);
+        };
+    });
 }
 
 function getScoreClass(rel) {
@@ -736,6 +830,192 @@ function getScoreClass(rel) {
     if (r === 1) return 'bogey';
     if (r >= 2) return 'double';
     return 'par';
+}
+
+function shortName(name) {
+    const parts = name.split(' ');
+    return parts.length > 1 ? `${parts[0][0]}. ${parts.slice(1).join(' ')}` : name;
+}
+
+function formatThruLabel(thru) {
+    if (thru === undefined || thru === null || thru === '--') return '';
+    if (thru === 'F') return 'Finished';
+    if (thru === 'MC') return '';
+    if (typeof thru === 'number' || /^\d+$/.test(String(thru))) return `Thru ${thru}`;
+    // Tee time string
+    return `Tee ${thru}`;
+}
+
+function fmtRel(n) {
+    if (n === 0) return 'E';
+    return n > 0 ? `+${n}` : `${n}`;
+}
+
+function renderRoundBreakdownHtml(breakdown) {
+    if (!breakdown || !breakdown.some(r => r.total !== null)) return '';
+    return `
+        <div class="round-breakdown" title="Team total score vs par by round">
+            ${breakdown.map(r => `
+                <div class="rb-round">
+                    <span class="rb-label">R${r.round}</span>
+                    <span class="rb-value ${r.total === null ? 'empty' : r.total < 0 ? 'under' : r.total > 0 ? 'over' : 'even'}">${r.total === null ? '–' : fmtRel(r.total)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+const scenarioAdjustments = new Map(); // competitorId -> stroke delta (-6 to +6)
+const MAX_ADJUST = 6;
+
+function renderScenariosModal() {
+    const el = document.getElementById('scenarios-modal-body');
+    if (!latestCompetitors) {
+        el.innerHTML = '<p class="help-note">Waiting for tournament data…</p>';
+        return;
+    }
+
+    const getScoreValue = (c) => {
+        const s = c.score?.displayValue || c.score;
+        if (s === 'E' || s === 'even' || s === 'even par') return 0;
+        return parseInt(s?.toString().replace('+', '')) || 0;
+    };
+
+    const stillIn = latestCompetitors
+        .filter(c => {
+            const id = c.status?.type?.id;
+            const disp = c.status?.displayValue || '';
+            if (id === "3" || disp.includes("MC")) return false;
+            if (cutInfo.hasOccurred && getScoreValue(c) > cutInfo.score) return false;
+            return true;
+        })
+        .sort((a, b) => getScoreValue(a) - getScoreValue(b));
+
+    const candidates = stillIn.slice(0, 20);
+
+    if (candidates.length === 0) {
+        el.innerHTML = '<p class="help-note">No candidates available.</p>';
+        return;
+    }
+
+    const currentStandings = computeStandingsSnapshot(latestCompetitors);
+
+    el.innerHTML = `
+        <p class="scenarios-intro">Adjust any of the top 20 golfers' scores (up to ±${MAX_ADJUST} strokes) to see how each team's total would change. <strong>−</strong> = one stroke better, <strong>+</strong> = one stroke worse. Other golfers stay at their current scores.</p>
+        <div id="scenario-standings" class="scenario-standings"></div>
+        <div class="scenario-adjusters-header">
+            <span>Top 20 in Contention</span>
+            <button class="scenario-reset-btn" id="scenario-reset">Reset All</button>
+        </div>
+        <div id="scenario-adjusters" class="scenario-adjusters"></div>
+    `;
+
+    const rerender = () => {
+        const simCompetitors = latestCompetitors.map(c => {
+            const delta = scenarioAdjustments.get(c.id) || 0;
+            if (delta === 0) return c;
+            const base = getScoreValue(c);
+            const ns = base + delta;
+            return {
+                ...c,
+                score: { displayValue: ns === 0 ? 'E' : (ns > 0 ? `+${ns}` : `${ns}`) }
+            };
+        });
+        renderStandings(simCompetitors, currentStandings);
+        renderAdjusters(candidates, getScoreValue);
+    };
+
+    const renderStandings = (simCompetitors, baseStandings) => {
+        const sim = computeStandingsSnapshot(simCompetitors);
+        const sorted = [...sim].sort((a, b) => b.total - a.total);
+        const anyChange = [...scenarioAdjustments.values()].some(v => v !== 0);
+
+        document.getElementById('scenario-standings').innerHTML = `
+            <table class="scenario-table">
+                <thead><tr><th>Rank</th><th>Drafter</th><th>${anyChange ? 'Simulated' : 'Total'}</th>${anyChange ? '<th>Δ</th>' : ''}</tr></thead>
+                <tbody>
+                    ${sorted.map((row, i) => {
+                        const base = baseStandings.find(c => c.drafter === row.drafter);
+                        const delta = row.total - (base?.total || 0);
+                        return `
+                        <tr>
+                            <td>${i + 1}</td>
+                            <td><strong>${row.drafter}</strong></td>
+                            <td class="sim-total">$${Math.round(row.total).toLocaleString()}</td>
+                            ${anyChange ? `<td class="${delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : ''}">${delta === 0 ? '—' : (delta > 0 ? '+' : '–') + '$' + Math.abs(Math.round(delta)).toLocaleString()}</td>` : ''}
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    };
+
+    const thruByName = {};
+    fullField.forEach(p => { thruByName[p.name] = p.thru; });
+
+    const renderAdjusters = (list, getVal) => {
+        document.getElementById('scenario-adjusters').innerHTML = list.map(c => {
+            const name = c.athlete.displayName;
+            const drafter = getDrafterForPlayer(name);
+            const base = getVal(c);
+            const delta = scenarioAdjustments.get(c.id) || 0;
+            const simScore = base + delta;
+            const formatted = simScore === 0 ? 'E' : (simScore > 0 ? `+${simScore}` : `${simScore}`);
+            const baseFormatted = base === 0 ? 'E' : (base > 0 ? `+${base}` : `${base}`);
+            const adjText = delta === 0 ? '' : `(${delta > 0 ? '+' : ''}${delta})`;
+            const thru = thruByName[name];
+            const thruLabel = formatThruLabel(thru);
+            return `
+                <div class="adjuster-row ${delta !== 0 ? 'adjusted' : ''}" data-id="${c.id}">
+                    <div class="adjuster-name">
+                        <span class="a-name">${shortName(name)}</span>
+                        ${drafter ? `<span class="drafter-label">${drafter}</span>` : ''}
+                        ${thruLabel ? `<span class="a-thru">${thruLabel}</span>` : ''}
+                    </div>
+                    <div class="adjuster-score">
+                        <span class="a-base">${baseFormatted}</span>
+                        <span class="a-arrow">→</span>
+                        <span class="a-sim ${delta < 0 ? 'better' : delta > 0 ? 'worse' : ''}">${formatted}</span>
+                        <span class="a-delta">${adjText}</span>
+                    </div>
+                    <div class="adjuster-controls">
+                        <button class="adj-btn" data-act="better" aria-label="One stroke better">−</button>
+                        <button class="adj-btn" data-act="worse" aria-label="One stroke worse">+</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        document.querySelectorAll('#scenario-adjusters .adj-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const row = btn.closest('.adjuster-row');
+                const id = row.dataset.id;
+                const curr = scenarioAdjustments.get(id) || 0;
+                const act = btn.dataset.act;
+                // "+" = one stroke worse (adds to score); "−" = one stroke better (subtracts from score)
+                const next = act === 'worse' ? curr + 1 : curr - 1;
+                if (next < -MAX_ADJUST || next > MAX_ADJUST) return;
+                scenarioAdjustments.set(id, next);
+                rerender();
+            };
+        });
+    };
+
+    document.getElementById('scenario-reset').onclick = () => {
+        scenarioAdjustments.clear();
+        rerender();
+    };
+
+    rerender();
+}
+
+function computeStandingsSnapshot(competitors) {
+    const { prizes } = calculatePrizesAndRanks(competitors);
+    return Object.entries(draftData).map(([drafter, players]) => {
+        const total = players.reduce((sum, name) => sum + (prizes[name] || 0), 0);
+        return { drafter, total };
+    });
 }
 
 init();

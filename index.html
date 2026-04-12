@@ -11,17 +11,19 @@
 </head>
 <body>
     <header>
-        <button id="help-btn" class="help-btn" aria-label="How this pool works">?</button>
         <div class="container">
             <h1>2026 Masters Pool</h1>
-            <div class="cut-line-display" id="cut-line-display">
-                <!-- Cut line will be injected here -->
+            <div class="status-row">
+                <span class="tournament-status" id="tournament-status"></span>
+                <span class="cut-line-display" id="cut-line-display"></span>
             </div>
-            <div class="refresh-controls">
-                <button id="refresh-btn">Refresh Leaderboard</button>
-                <button id="field-rankings-btn">Full Field Rankings</button>
-                <div id="last-updated" class="last-updated">Updating...</div>
+            <div class="header-controls">
+                <button id="refresh-btn" class="ctrl-btn primary">Refresh</button>
+                <button id="field-rankings-btn" class="ctrl-btn">Field</button>
+                <button id="scenarios-btn" class="ctrl-btn">Scenarios</button>
+                <button id="help-btn" class="ctrl-btn icon" aria-label="How this pool works">?</button>
             </div>
+            <div id="last-updated" class="last-updated">Updating...</div>
         </div>
     </header>
 
@@ -32,6 +34,19 @@
             </div>
         </section>
     </main>
+
+    <!-- Scenarios Modal -->
+    <div id="scenarios-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Sunday Scenarios</h2>
+                <span class="close-modal" aria-label="Close">&times;</span>
+            </div>
+            <div class="modal-body" id="scenarios-modal-body">
+                <!-- Scenarios content injected here -->
+            </div>
+        </div>
+    </div>
 
     <!-- Help Modal -->
     <div id="help-modal" class="modal">
@@ -65,6 +80,6 @@
         </div>
     </footer>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>
