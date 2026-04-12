@@ -11,19 +11,22 @@ const draftData = {
   "Ethan": ["Matt Fitzpatrick", "Tommy Fleetwood", "Jordan Spieth", "Jake Knapp", "Casey Jarvis"]
 };
 
+// 2026 Masters purse: $22.5M. Missed cut: $25,000. Positions 51-54 listed.
+// flat_cut_min is a floor for made-cut players past position 54 (ties pushing field deep).
 const prizeTable = {
-  "1": 4200000, "2": 2268000, "3": 1428000, "4": 1008000, "5": 840000,
-  "6": 756000, "7": 703500, "8": 651000, "9": 609000, "10": 567000,
-  "11": 525000, "12": 483000, "13": 441000, "14": 399000, "15": 378000,
-  "16": 357000, "17": 336000, "18": 315000, "19": 294000, "20": 273000,
-  "21": 252000, "22": 235200, "23": 218400, "24": 201600, "25": 184800,
-  "26": 168000, "27": 161700, "28": 155400, "29": 149100, "30": 142800,
-  "31": 136500, "32": 130200, "33": 123900, "34": 118650, "35": 113400,
-  "36": 108150, "37": 102900, "38": 98700, "39": 94500, "40": 90300,
-  "41": 86100, "42": 81900, "43": 77700, "44": 73500, "45": 69300,
-  "46": 65100, "47": 60900, "48": 57540, "49": 54600, "50": 52920,
+  "1": 4500000, "2": 2430000, "3": 1530000, "4": 1080000, "5": 900000,
+  "6": 810000, "7": 753750, "8": 697500, "9": 652500, "10": 607500,
+  "11": 562500, "12": 517500, "13": 472500, "14": 427500, "15": 405000,
+  "16": 382500, "17": 360000, "18": 337500, "19": 315000, "20": 292500,
+  "21": 270000, "22": 252000, "23": 234000, "24": 216000, "25": 198000,
+  "26": 180000, "27": 172250, "28": 166500, "29": 159750, "30": 153000,
+  "31": 146250, "32": 139500, "33": 132750, "34": 127125, "35": 121500,
+  "36": 115875, "37": 110250, "38": 105750, "39": 101250, "40": 96750,
+  "41": 92250, "42": 87750, "43": 83250, "44": 78750, "45": 74250,
+  "46": 69750, "47": 65250, "48": 61650, "49": 58500, "50": 56700,
+  "51": 55350, "52": 54000, "53": 52650, "54": 51300,
   "cut": 25000,
-  "flat_cut_min": 40000
+  "flat_cut_min": 51300
 };
 
 let expandedTeams = new Set();
@@ -32,30 +35,101 @@ let cutInfo = { score: 0, hasOccurred: false };
 
 async function init() {
     document.getElementById('refresh-btn').addEventListener('click', updateLeaderboard);
-    
-    const modal = document.getElementById('field-modal');
+
+    const fieldModal = document.getElementById('field-modal');
     const fieldBtn = document.getElementById('field-rankings-btn');
-    const closeBtn = document.getElementsByClassName('close-modal')[0];
+    const helpModal = document.getElementById('help-modal');
+    const helpBtn = document.getElementById('help-btn');
 
     fieldBtn.onclick = () => {
         renderFieldModal();
-        modal.style.display = "block";
-        document.body.style.overflow = "hidden";
+        openModal(fieldModal);
     };
 
-    closeBtn.onclick = () => {
-        modal.style.display = "none";
-        document.body.style.overflow = "auto";
+    helpBtn.onclick = () => {
+        renderHelpModal();
+        openModal(helpModal);
     };
 
-    window.onclick = (event) => {
-        if (event.target == modal) {
-            modal.style.display = "none";
-            document.body.style.overflow = "auto";
-        }
-    };
+    document.querySelectorAll('.close-modal').forEach(btn => {
+        btn.onclick = () => closeAllModals();
+    });
+
+    window.addEventListener('click', (event) => {
+        if (event.target.classList?.contains('modal')) closeAllModals();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeAllModals();
+    });
 
     await updateLeaderboard();
+}
+
+function openModal(modal) {
+    modal.style.display = "block";
+    document.body.style.overflow = "hidden";
+}
+
+function closeAllModals() {
+    document.querySelectorAll('.modal').forEach(m => m.style.display = "none");
+    document.body.style.overflow = "auto";
+}
+
+function renderHelpModal() {
+    const el = document.getElementById('help-modal-body');
+    const fmtPrize = (n) => '$' + n.toLocaleString();
+    const payoutRows = [];
+    for (let p = 1; p <= 50; p++) {
+        payoutRows.push(`<tr><td>${p}</td><td>${fmtPrize(prizeTable[p])}</td></tr>`);
+    }
+
+    el.innerHTML = `
+        <section class="help-section">
+            <h3>Scorecard Key</h3>
+            <div class="help-key-grid">
+                <div class="help-key-item"><span class="hole-score eagle">2</span><div><strong>Eagle</strong><span>2 under par</span></div></div>
+                <div class="help-key-item"><span class="hole-score birdie">3</span><div><strong>Birdie</strong><span>1 under par</span></div></div>
+                <div class="help-key-item"><span class="hole-score par">4</span><div><strong>Par</strong><span>even</span></div></div>
+                <div class="help-key-item"><span class="hole-score bogey">5</span><div><strong>Bogey</strong><span>1 over par</span></div></div>
+                <div class="help-key-item"><span class="hole-score double">6</span><div><strong>Double+</strong><span>2+ over par</span></div></div>
+            </div>
+        </section>
+
+        <section class="help-section">
+            <h3>Pool Format</h3>
+            <p>Winner-take-all, $10 buy-in. 8 drafters, 5 golfers each (snake draft). Team rank = total prize money earned by your 5 golfers.</p>
+        </section>
+
+        <section class="help-section">
+            <h3>Projected vs Locked</h3>
+            <p><strong>Projected</strong> — live earnings based on the current leaderboard. Updates as scores change.</p>
+            <p><strong>Locked</strong> — finalized earnings from golfers who already missed the cut ($25k each). Can't change.</p>
+            <p>Pre-cut, teams rank first by projected golfers making cut, then projected $. Post-cut, by projected $ only.</p>
+        </section>
+
+        <section class="help-section">
+            <h3>Cut Rule</h3>
+            <p>After 36 holes, the top 50 + ties make the weekend. Golfers who miss the cut receive $25,000 (Masters consolation).</p>
+            <p>During rounds 1–2, "Proj. Cut" shows the current 50th-place score — the projected cut line.</p>
+        </section>
+
+        <section class="help-section">
+            <h3>Tie Handling</h3>
+            <p>When golfers tie, they split the combined prize money for those positions equally (e.g. T2 splits 2nd + 3rd prize).</p>
+        </section>
+
+        <section class="help-section">
+            <h3>2026 Payout Table ($22.5M Purse)</h3>
+            <div class="help-payout-wrap">
+                <table class="help-payout">
+                    <thead><tr><th>Pos</th><th>Prize</th></tr></thead>
+                    <tbody>${payoutRows.join('')}</tbody>
+                </table>
+            </div>
+            <p class="help-note">51st and below: ~$${prizeTable[51].toLocaleString()} down to ~$${prizeTable[54].toLocaleString()}. Missed cut: ${fmtPrize(prizeTable.cut)}.</p>
+        </section>
+    `;
 }
 
 async function updateLeaderboard() {
@@ -396,6 +470,17 @@ function calculatePrizesAndRanks(competitors) {
         }
     });
 
+    // Pre-cut: players projected to miss cut should earn cut consolation ($25k),
+    // not their current position prize. Keep rank intact so leaderboard shows true position.
+    if (!cutInfo.hasOccurred && cutInfo.score !== Infinity) {
+        competitors.forEach(c => {
+            const name = c.athlete.displayName;
+            if (!isPlayerCut(c) && getScoreValue(c) > cutInfo.score) {
+                prizes[name] = prizeTable.cut;
+            }
+        });
+    }
+
     return { prizes, ranks };
 }
 
@@ -644,13 +729,13 @@ function renderFieldModal(rankCounts) {
 }
 
 function getScoreClass(rel) {
-    if (!rel || rel === 'E') return '';
+    if (!rel || rel === 'E') return 'par';
     const r = parseInt(rel);
     if (r <= -2) return 'eagle';
     if (r === -1) return 'birdie';
     if (r === 1) return 'bogey';
     if (r >= 2) return 'double';
-    return '';
+    return 'par';
 }
 
 init();

@@ -33,6 +33,36 @@ header {
     padding: 1.5rem 0;
     text-align: center;
     border-bottom: 4px solid var(--masters-gold);
+    position: relative;
+}
+
+.help-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--masters-gold);
+    border: 2px solid var(--masters-gold);
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.help-btn:hover {
+    background: var(--masters-gold);
+    color: var(--augusta-green);
 }
 
 header .container {
@@ -322,10 +352,39 @@ button:disabled {
     min-height: 24px;
 }
 
-.hole-score.eagle { background-color: #ffeb3b; }
-.hole-score.birdie { background-color: #e1f5fe; color: #0288d1; border: 1px solid #b3e5fc; border-radius: 50%; }
-.hole-score.bogey { background-color: #efebe9; color: #5d4037; }
-.hole-score.double { background-color: #212121; color: white; }
+/* Traditional scorecard: circles = under par, squares = over par. Masters palette only. */
+.hole-score.par {
+    background: #f4f4f2;
+    color: #333;
+}
+.hole-score.birdie {
+    background: #fff4c2;
+    color: var(--augusta-green);
+    border: 1.5px solid var(--masters-gold);
+    border-radius: 50%;
+}
+.hole-score.eagle {
+    background: var(--masters-gold);
+    color: var(--augusta-green);
+    border: 1.5px solid var(--augusta-green);
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 3.5px var(--augusta-green);
+    font-weight: 800;
+}
+.hole-score.bogey {
+    background: #eef3f0;
+    color: var(--augusta-green);
+    border: 1.5px solid var(--augusta-green);
+    border-radius: 3px;
+}
+.hole-score.double {
+    background: var(--augusta-green);
+    color: white;
+    border: 1.5px solid var(--augusta-green);
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 3.5px var(--augusta-green);
+    font-weight: 800;
+}
 
 footer {
     margin-top: 2rem;
@@ -508,6 +567,128 @@ footer {
     align-self: center;
 }
 
+/* Help Modal */
+.help-section {
+    margin-bottom: 1.2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+}
+.help-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+.help-section h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.05rem;
+    color: var(--augusta-green);
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+}
+
+.help-section p {
+    font-size: 0.88rem;
+    color: #333;
+    margin-bottom: 0.4rem;
+    line-height: 1.5;
+}
+
+.help-section p:last-child { margin-bottom: 0; }
+
+.help-section strong {
+    color: var(--augusta-green);
+}
+
+.help-key-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px 14px;
+    margin-top: 0.4rem;
+}
+
+.help-key-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.help-key-item .hole-score {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    max-width: 32px;
+    aspect-ratio: 1;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.help-key-item > div {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.help-key-item strong {
+    font-size: 0.85rem;
+    color: var(--text-dark);
+}
+
+.help-key-item span {
+    font-size: 0.72rem;
+    color: var(--text-light);
+}
+
+.help-payout-wrap {
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: #fff;
+}
+
+.help-payout {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.help-payout thead th {
+    position: sticky;
+    top: 0;
+    background: var(--augusta-green);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.help-payout td {
+    padding: 0.3rem 0.8rem;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.help-payout tbody tr:nth-child(odd) {
+    background: #faf9f5;
+}
+
+.help-payout td:first-child {
+    font-weight: 700;
+    color: var(--text-light);
+    width: 60px;
+}
+
+.help-payout td:last-child {
+    color: var(--augusta-green);
+    font-weight: 600;
+}
+
+.help-note {
+    font-size: 0.78rem !important;
+    color: var(--text-light) !important;
+    margin-top: 0.5rem !important;
+    font-style: italic;
+}
+
 @media (max-width: 600px) {
     h1 { font-size: 1.8rem; }
     .cut-line-display { font-size: 0.8rem; padding: 0.3rem 0.6rem; }
@@ -562,5 +743,26 @@ footer {
     .prize-live, .prize-locked {
         min-width: 0;
         margin-right: 0;
+    }
+
+    .help-btn {
+        top: 10px;
+        right: 10px;
+        width: 28px;
+        height: 28px;
+        font-size: 0.9rem;
+    }
+
+    .help-key-grid {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px 10px;
+    }
+
+    .help-payout {
+        font-size: 0.78rem;
+    }
+
+    .help-payout td {
+        padding: 0.25rem 0.6rem;
     }
 }
